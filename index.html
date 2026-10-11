@@ -87,6 +87,10 @@ body.view #btnUndo,body.view #typeForm{display:none!important}
   .card{padding:10px}
   .bar{padding:6px 10px}
   #btnUndo{max-width:100%;white-space:normal;text-align:left}
+  /* Dòng tổng 2 cột: gõ giá ở tiệm xong không phải cuộn qua cả màn hình số tổng mới tới nhóm Nên chốt */
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .stat{padding:8px}
+  .stat b{font-size:15px;overflow-wrap:anywhere}
   dialog td,.preview td{white-space:normal}
   /* Bảng giá: mỗi loại một khối */
   #priceForm .scroll{overflow:visible}
@@ -186,7 +190,7 @@ const moneyHelp = s => `Không hiểu số tiền "${String(s).trim()}". Gõ s�
 // Số tiền viết vào ô nhập: dưới 1 triệu thì kèm "đ", để đọc lại (bấm Lưu) không bị hiểu thành nghìn đồng
 const fmtIn = x => !x ? '' : x < 1e6 ? digits(x) + 'đ' : digits(x);
 const parseN = s => { const v = Number(String(s ?? '').replace(',', '.')); return isNaN(v) ? 0 : v; };
-const fmtM = x => (x == null || isNaN(x)) ? '—' : NF.format(Math.round(x)) + ' đ';
+const fmtM = x => (x == null || isNaN(x)) ? '—' : NF.format(Math.round(x)) + '\u00a0đ';   // khoảng trắng không ngắt dòng: chữ đ không rơi xuống dòng riêng
 const fmtTr = x => x >= 1e6 ? (x >= 1e8 ? NF1 : NF2).format(x / 1e6) + 'tr' : digits(x) + 'đ';
 const fmtMS = x => (x == null || isNaN(x)) ? '—' : (x > 0.5 ? '+' : '') + fmtM(x);
 const fmtP = (x, sign = true) => (x == null || isNaN(x) || !isFinite(x)) ? '—' :
@@ -356,8 +360,11 @@ function commit(label = 'thay đổi', opts = {}) {
 function undo() {
   const u = !VIEW && undoStack.pop(); if (!u) return;
   D = normalize(JSON.parse(u.json)); _cache = null; ui.plans = null;
+  if (u.notice && ui.notice === u.notice) { ui.notice = ''; ui.rebuyOff = null; }   // dòng báo của chính thao tác vừa hoàn tác
   persist(); render();
 }
+// Dòng báo đi kèm thao tác vừa lưu (tắt nhắc mua lại, sang ngày mới): Hoàn tác thao tác đó thì bỏ dòng báo
+function stepNotice(html) { setNotice(html); const u = !VIEW && undoStack.at(-1); if (u) u.notice = html; }
 
 // IndexedDB để nhớ file đã chọn giữa các lần mở app
 function idb(mode, fn) {
@@ -864,7 +871,7 @@ function saveRow(id) {
   setPrice({ ngay, loai_id: id, mua_vao: mv, ban_ra: br });
   if (VIEW) ui.viewTemp = true;
   commit(`giá ${t.ten} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
-  if (rolled && ngay === today()) setNotice(newDayNote());
+  if (rolled && ngay === today()) stepNotice(newDayNote());
 }
 // Tick Không đổi / Tất cả không đổi (ids trống = mọi dòng chưa có giá): ghi nhận giá điền sẵn cho ngày đang chọn
 function markSame(ids) {
@@ -875,7 +882,7 @@ function markSame(ids) {
   if (!rows.length) return;
   rows.forEach(setPrice); if (VIEW) ui.viewTemp = true;
   commit(rows.length > 1 ? `giá không đổi ngày ${fmtD(ngay).slice(0, 5)}` : `giá ${typeById(rows[0].loai_id).ten} không đổi ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
-  if (rolled && ngay === today()) setNotice(newDayNote());
+  if (rolled && ngay === today()) stepNotice(newDayNote());
 }
 function homRest() {
   let html = '';
@@ -1262,7 +1269,7 @@ function dlgLot(lot, prefill) {
       commit(isEdit ? 'sửa lô ' + lot.id : 'thêm lô ' + newId);
       if (off.length) {
         ui.rebuyOff = off;
-        setNotice(`Đã tắt nhắc mua lại ${off.map(x => `${esc(x.id)} (${fmtTr(x.gia)})`).join(', ')} vì vừa mua ${esc(newId)} cùng loại. <button class="sm" data-act="rebuy-keep">Giữ lại nhắc</button>`);
+        stepNotice(`Đã tắt nhắc mua lại ${off.map(x => `${esc(x.id)} (${fmtTr(x.gia)})`).join(', ')} vì vừa mua ${esc(newId)} cùng loại. <button class="sm" data-act="rebuy-keep">Giữ lại nhắc</button>`);
       }
     },
     (f, e) => {
