@@ -47,7 +47,7 @@ input[type=number]{width:90px}
 .stat{border:1px solid var(--line);border-radius:8px;padding:10px}
 .stat b{display:block;font-size:18px}
 .stat span{font-size:12px;color:var(--muted)}
-.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:14px}
 .warn{background:#fff4e5;border:1px solid #f3d19c;border-radius:6px;padding:6px 10px;margin:8px 0}
 .note{background:#eef4ff;border:1px solid #c9d8f5;border-radius:6px;padding:8px 10px;margin-bottom:12px}
 dialog{border:1px solid var(--line);border-radius:10px;padding:0;max-width:640px;width:calc(100% - 32px)}
@@ -75,6 +75,47 @@ dialog details{margin:6px 0 4px}
 .chart .l-avg{stroke:var(--text);stroke-dasharray:2 3}
 .chart .m-buy{fill:var(--green)}.chart .m-sell{fill:var(--red)}
 .chart .guide{stroke:var(--muted)}
+/* Màn hình hẹp (điện thoại): tab Hôm nay không phải cuộn ngang */
+@media (max-width:639px){
+  main{padding:10px}
+  .card{padding:10px}
+  .bar{padding:6px 10px}
+  #btnUndo{max-width:100%;white-space:normal;text-align:left}
+  dialog td,.preview td{white-space:normal}
+  /* Bảng giá: mỗi loại một khối */
+  #priceForm .scroll{overflow:visible}
+  #priceForm table,#priceForm tbody,table.lots,table.lots tbody,table.cards,table.cards tbody{display:block}
+  #priceForm tr.hd,table.lots tr.hd,table.cards tr.hd{display:none}
+  #priceForm tr.prow{display:grid;grid-template-columns:1fr auto;gap:6px 8px;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
+  #priceForm tr.prow td{border:0;padding:0;white-space:normal}
+  #priceForm .c-ten{font-weight:600}
+  #priceForm .c-dv{text-align:right;color:var(--muted)}
+  #priceForm .c-mv,#priceForm .c-br{grid-column:1/-1;display:flex;align-items:center;gap:8px}
+  #priceForm .c-mv::before{content:"Tiệm mua vào";flex:1;font-size:12px;color:var(--muted)}
+  #priceForm .c-br::before{content:"Tiệm bán ra";flex:1;font-size:12px;color:var(--muted)}
+  #priceForm .c-mv input,#priceForm .c-br input{width:170px}
+  #priceForm .c-buy{grid-column:1/-1}
+  #priceForm .c-be{text-align:left;font-size:12px;color:var(--muted)}
+  #priceForm .c-be::before{content:"Mua hôm nay cần tăng để hòa vốn "}
+  #priceForm .c-note{grid-column:1/-1}
+  #priceForm .c-kd{grid-column:1/-1}
+  #priceForm .c-kd:empty{display:none}
+  /* Nhóm lô: mỗi lô một thẻ */
+  table.lots tr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;border-bottom:1px solid var(--line);padding:8px 0}
+  table.lots td{border:0;padding:0;white-space:normal}
+  table.lots .c-con,table.lots .c-von,table.lots .c-kv,table.lots .c-nh{display:none}
+  table.lots .c-lo{order:1}
+  table.lots .c-pct{order:2;font-size:16px}
+  table.lots .c-loi{order:3;text-align:left}
+  table.lots .c-gt{order:4}
+  table.lots .c-gt::before{content:"giá trị ";color:var(--muted);font-size:12px}
+  table.lots .c-act{order:5;grid-column:1/-1}
+  table.lots .c-act button{padding:5px 12px;font-size:14px;margin-top:2px}
+  /* Bảng nhắc mua lại: thẻ có nhãn */
+  table.cards tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}
+  table.cards td{display:flex;justify-content:space-between;gap:10px;border:0;padding:2px 0;white-space:normal}
+  table.cards td[data-l]::before{content:attr(data-l);color:var(--muted);font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -510,21 +551,21 @@ function viewHomNay() {
     return { b, lot, p, hit: p && p.ban_ra && p.ban_ra <= b.gia_mua_lai };
   }).filter(x => x.lot);
   const hits = rebuy.filter(x => x.hit), waiting = rebuy.filter(x => !x.hit);
-  const rebuyTable = (list, hit) => `<div class="scroll"><table><tr><th>Lô đã bán</th><th>Ngày bán</th><th>Đã bán</th><th class="n">Giá đã bán</th><th class="n">Giá muốn mua lại</th><th class="n">Tiệm bán ra hiện tại</th><th></th></tr>
-    ${list.map(x => `<tr><td><b>${esc(x.lot.id)}</b><br><span class="small muted">${esc(typeById(x.lot.loai_id)?.ten)}</span></td><td>${fmtD(x.b.ngay)}</td><td>${x.b.so_mon} × ${fmtW(x.lot.trong_luong_mon_dem)}</td>
-      <td class="n">${fmtM(x.b.gia_ban)}</td><td class="n">${fmtM(x.b.gia_mua_lai)}</td><td class="n">${x.p && x.p.ban_ra ? fmtM(x.p.ban_ra) : '—'}</td>
+  const rebuyTable = (list, hit) => `<div class="scroll"><table class="cards"><tr class="hd"><th>Lô đã bán</th><th>Ngày bán</th><th>Đã bán</th><th class="n">Giá đã bán</th><th class="n">Giá muốn mua lại</th><th class="n">Tiệm bán ra hiện tại</th><th></th></tr>
+    ${list.map(x => `<tr><td><b>${esc(x.lot.id)}</b> <span class="small muted">${esc(typeById(x.lot.loai_id)?.ten)}</span></td><td data-l="Ngày bán">${fmtD(x.b.ngay)}</td><td data-l="Đã bán">${x.b.so_mon} × ${fmtW(x.lot.trong_luong_mon_dem)}</td>
+      <td class="n" data-l="Giá đã bán">${fmtM(x.b.gia_ban)}</td><td class="n" data-l="Giá muốn mua lại">${fmtM(x.b.gia_mua_lai)}</td><td class="n" data-l="Tiệm bán ra hiện tại">${x.p && x.p.ban_ra ? fmtM(x.p.ban_ra) : '—'}</td>
       <td>${hit ? `<button class="sm primary" data-act="rebuy" data-id="${esc(x.b.id)}">Mua lại…</button> ` : ''}<button class="sm" data-act="rebuy-clear" data-id="${esc(x.b.id)}">Bỏ nhắc</button></td></tr>`).join('')}</table></div>`;
   if (hits.length) html += card(`🔁 Có thể mua lại (${hits.length})`, rebuyTable(hits, true), 'grp-chot');
   if (waiting.length) html += `<section class="card"><details><summary><b>🔁 Đang chờ giá mua lại (${waiting.length})</b> <span class="muted small">— bấm để xem</span></summary>${rebuyTable(waiting, false)}</details></section>`;
   return html;
 }
 function lotStateTable(list, extra) {
-  return `<table><tr><th>Lô</th><th>Còn lại</th><th class="n">Vốn</th><th class="n">Giá trị hôm nay</th>
+  return `<table class="lots"><tr class="hd"><th>Lô</th><th>Còn lại</th><th class="n">Vốn</th><th class="n">Giá trị hôm nay</th>
     <th class="n">Lời/lỗ</th><th class="n">%</th><th class="n">Mục tiêu</th><th class="n">So với gửi NH</th><th></th></tr>
-    ${list.map(s => `<tr><td><b>${esc(s.lot.id)}</b><br><span class="small muted">${esc(s.t?.ten)}</span></td><td>${s.n} × ${fmtW(s.lot.trong_luong_mon_dem)}</td>
-      <td class="n">${fmtM(s.V)}</td><td class="n">${fmtM(s.G)}</td>
-      <td class="n ${cls(s.L)}">${fmtMS(s.L)}</td><td class="n ${clsP(s.g)}"><b>${fmtP(s.g)}</b></td><td class="n">${fmtP(s.kv, false)}</td>
-      <td class="n ${cls(s.vsBank)}">${fmtMS(s.vsBank)}</td><td>${extra(s)}</td></tr>`).join('')}</table>`;
+    ${list.map(s => `<tr><td class="c-lo"><b>${esc(s.lot.id)}</b><br><span class="small muted">${esc(s.t?.ten)}</span></td><td class="c-con">${s.n} × ${fmtW(s.lot.trong_luong_mon_dem)}</td>
+      <td class="n c-von">${fmtM(s.V)}</td><td class="n c-gt">${fmtM(s.G)}</td>
+      <td class="n c-loi ${cls(s.L)}">${fmtMS(s.L)}</td><td class="n c-pct ${clsP(s.g)}"><b>${fmtP(s.g)}</b></td><td class="n c-kv">${fmtP(s.kv, false)}</td>
+      <td class="n c-nh ${cls(s.vsBank)}">${fmtMS(s.vsBank)}</td><td class="c-act">${extra(s)}</td></tr>`).join('')}</table>`;
 }
 
 // ===================== Tab: Lô vàng =====================
@@ -635,11 +676,11 @@ function viewCanTien() {
     if (p.same) return '';
     const S = planSummary(p, X);
     return `<section class="card"><h2>${esc(p.name)}</h2><p class="muted small">${esc(p.desc)}</p>
-      <table><tr><th>Lô</th><th>Loại</th><th class="n">Bán (món)</th><th class="n">Còn</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ</th></tr>
+      <div class="scroll"><table><tr><th>Lô</th><th>Loại</th><th class="n">Bán (món)</th><th class="n">Còn</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ</th></tr>
       ${S.rows.map((x, ri) => `<tr><td>${esc(x.s.lot.id)}</td><td>${esc(x.s.t?.ten)}<br><span class="small muted">${fmtW(x.s.lot.trong_luong_mon_dem)}/món</span></td>
         <td class="n"><input type="number" min="0" max="${x.s.n}" value="${x.r.k}" data-plan="${pi_}" data-row="${ri}" style="width:64px"></td><td class="n">${x.s.n}</td>
         <td class="n">${fmtM(x.t)}</td><td class="n ${cls(x.loi)}">${fmtMS(x.loi)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Không có lô phù hợp.</td></tr>'}
-      <tr class="total"><td colspan="4">Tổng thu</td><td class="n">${fmtM(S.thu)}</td><td class="n ${cls(S.loi)}">${fmtMS(S.loi)}</td></tr></table>
+      <tr class="total"><td colspan="4">Tổng thu</td><td class="n">${fmtM(S.thu)}</td><td class="n ${cls(S.loi)}">${fmtMS(S.loi)}</td></tr></table></div>
       <table class="preview" style="margin-top:8px">
         <tr><td>${S.du >= 0 ? 'Dư so với số cần' : 'Còn thiếu'}</td><td class="n ${S.du >= 0 ? '' : 'neg'}">${fmtM(Math.abs(S.du))}</td></tr>
         <tr><td>Vàng còn lại sau khi bán</td><td class="n">${fmtW(S.totalDem)}</td></tr>
@@ -674,7 +715,7 @@ function viewLichSu() {
   }).join('');
   let html = card('Lịch sử bán', `<div class="row"><select id="lsYear"><option value="">Tất cả các năm</option>${years.map(y => `<option ${ui.lsYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
     ${sales.length ? salesTable(sales) : '<p class="muted">Chưa có lần bán nào.</p>'}
-    ${years.length ? `<h3>Lời đã chốt theo năm</h3><table style="width:auto"><tr><th>Năm</th><th class="n">Số lần bán</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ chốt</th></tr>${byYear}</table>` : ''}`);
+    ${years.length ? `<h3>Lời đã chốt theo năm</h3><div class="scroll"><table style="width:auto"><tr><th>Năm</th><th class="n">Số lần bán</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ chốt</th></tr>${byYear}</table></div>` : ''}`);
   const typeRows = D.vang.loai.map(t => {
     const sts = D.vang.lo.filter(l => l.loai_id === t.id).map(l => lotState(l)).filter(s => s.n > 0);
     const V = sts.reduce((a, s) => a + s.V, 0), G = sts.every(s => s.hasPrice) ? sts.reduce((a, s) => a + s.G, 0) : null;
@@ -705,11 +746,11 @@ function viewThamSo() {
     card('Mua thêm', `<div class="row">${f('vang_mua_giam_pct', 'Mua thêm khi giá giảm từ đỉnh 90 ngày ≥ (%)')}
       <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${T.vang_han_muc_von ? digits(T.vang_han_muc_von) : ''}" placeholder="không giới hạn" style="width:200px"></label></div>
     <p class="muted small">App không đoán giá. Vùng mua: giá tiệm bán ra thấp hơn đỉnh 90 ngày ít nhất bấy nhiêu %; đã mua loại đó trong 90 ngày thì lần sau phải rẻ hơn lần mua gần nhất bấy nhiêu % nữa. Chênh lệch mua–bán cao bất thường thì gợi ý đợi; vốn đang giữ chạm hạn mức thì thôi gợi ý mua.</p>`) +
-    card('Loại vàng', `<table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
+    card('Loại vàng', `<div class="scroll"><table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
       ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"></td>
         <td><select data-type-unit="${esc(t.id)}" ${used(t.id) ? 'disabled title="Loại đã có lô hoặc giá, không đổi đơn vị được"' : ''}>
           ${unitOptions(t.don_vi_niem_yet)}</select></td>
-        <td><button class="sm danger" data-act="type-del" data-id="${esc(t.id)}" ${D.vang.lo.some(l => l.loai_id === t.id) ? 'disabled title="Loại đã có lô, không xóa được"' : ''}>Xóa</button></td></tr>`).join('')}</table>
+        <td><button class="sm danger" data-act="type-del" data-id="${esc(t.id)}" ${D.vang.lo.some(l => l.loai_id === t.id) ? 'disabled title="Loại đã có lô, không xóa được"' : ''}>Xóa</button></td></tr>`).join('')}</table></div>
       <form id="typeForm"><div class="row" style="margin-top:10px"><label class="field"><span>Tên loại mới</span><input name="ten" required placeholder="VD: Nhẫn 9999"></label>
         <label class="field"><span>Đơn vị niêm yết</span><select name="dv">${unitOptions('chi')}</select></label>
         <button type="submit">+ Thêm loại</button></div></form>`) +
@@ -1062,11 +1103,13 @@ function download(name, text, type) {
 (async () => {
   render();
   if (hasFSA) {
+    // IndexedDB hay quyền file mà treo thì sau 2 giây vẫn vẽ app, không để trang trắng
+    const timeout = p => Promise.race([p, new Promise(r => setTimeout(() => r(null), 2000))]);
     let h = null;
-    try { h = await idbGet('file'); } catch { }
+    try { h = await timeout(idbGet('file')); } catch { }
     if (h) {
       pendingHandle = h;
-      try { if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') { booting = false; await useFile(h, false); return; } } catch { }
+      try { if (await timeout(h.queryPermission({ mode: 'readwrite' })) === 'granted') { booting = false; await useFile(h, false); return; } } catch { }
     }
   }
   booting = false; render(); persistStatus();
