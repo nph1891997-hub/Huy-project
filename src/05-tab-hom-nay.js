@@ -45,6 +45,7 @@ const setPrice = row => { D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.n
 function resetRow(f, id) {
   const b = basePrice(id, ui.priceDate), br = f['br_' + id];
   f['mv_' + id].value = b ? fmtIn(b.mua_vao) : ''; br.value = b && b.ban_ra ? fmtIn(b.ban_ra) : ''; delete br.dataset.touched;
+  delete br.closest('tr.prow').dataset.typed;
   refreshBuy(f);
 }
 function saveRow(id) {
@@ -53,7 +54,10 @@ function saveRow(id) {
   const t = typeById(id), ngay = f.ngay.value, base = basePrice(id, validDate(ngay) ? ngay : ui.priceDate);
   const mv = parseM(f['mv_' + id].value), br = parseM(f['br_' + id].value) || null;
   if (!mv) return resetRow(f, id);
-  if (base && base.mua_vao === mv && (base.ban_ra || null) === br) return;   // không đổi gì
+  // Gõ lại đúng giá điền sẵn (tiệm giữ giá) cho ngày chưa có giá: ghi nhận như tick Không đổi.
+  // Chỉ lướt qua dòng (Enter, Tab, bấm vào rồi ra, không gõ gì) thì không lưu, để giá cũ không thành giá hôm nay
+  const same = base && base.mua_vao === mv && (base.ban_ra || null) === br;
+  if (same && !(f['mv_' + id].closest('tr.prow').dataset.typed && validDate(ngay) && base.ngay < ngay)) return;
   if (!ngay) return tell('Chưa nhập ngày.');
   if (ngay > today()) return tell('Ngày nhập giá không được sau hôm nay.');
   if (!validDate(ngay)) return tell('Ngày chưa hợp lệ.');
@@ -67,7 +71,7 @@ function saveRow(id) {
     : `${t.ten}: giá ${fmtM(mv)} lệch ${fmtP(mv / ref - 1)} so với đơn giá lô ${lot0.id} (${fmtM(ref)}).\n\nGiá này có đúng không?`)) return resetRow(f, id);
   setPrice({ ngay, loai_id: id, mua_vao: mv, ban_ra: br });
   if (VIEW) ui.viewTemp = true;
-  commit(`giá ${t.ten} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
+  commit(`giá ${t.ten}${same ? ' không đổi' : ''} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
   if (rolled && ngay === today()) setNotice(newDayNote());
 }
 // Tick Không đổi / Tất cả không đổi (ids trống = mọi dòng chưa có giá): ghi nhận giá điền sẵn cho ngày đang chọn

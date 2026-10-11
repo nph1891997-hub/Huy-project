@@ -26,7 +26,7 @@ function cashPlans(X) {
   const C = prune(fill(loss, fill(prof.slice().sort((a, b) => a.g - b.g))));
   const toPlan = (name, desc, rows) => ({ name, desc, rows: rows.map(x => ({ id: x.s.lot.id, k: x.k })) });
   const plans = [
-    toPlan('A. Chốt lời tốt nhất', 'Lô đạt mục tiêu trước, rồi lô lời % cao nhất', A),
+    toPlan('A. Chốt lời tốt nhất', 'Lô đang ở nhóm Nên chốt trước (đạt mục tiêu hoặc lời tụt dưới mức nhắc), rồi lô lời % cao nhất', A),
     toPlan('B. Ít lô nhất', 'Ưu tiên một lô bán vừa đủ, hạn chế cắt lẻ nhiều lô', B),
     toPlan('C. Giữ lô tốt', 'Bán lô lời ít trước, giữ lô lời nhiều cho chạy tiếp', C)
   ];
@@ -52,7 +52,7 @@ function planSummary(plan, X) {
 const r_ = () => r();
 function viewCanTien() {
   let html = card('Cần tiền', `<form id="cashForm"><div class="row">
-    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="0" required style="width:200px"></label>
+    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="VD: 200 (triệu), 1,5 tỷ" required style="width:200px"></label>
     <button class="primary" type="submit">Gợi ý</button></div></form>
     <p class="muted small">Tính theo giá tiệm mua vào gần nhất của từng loại. Không đụng lô lỗ nếu các lô lời đã đủ tiền; thiếu thì lấy lô lỗ ít % nhất trước. Bán theo từng món nên có thể dư một chút. Giá thực tế ở tiệm khác thì sửa lại lần bán ở tab Lịch sử.</p>`);
   if (!ui.plans) return html;

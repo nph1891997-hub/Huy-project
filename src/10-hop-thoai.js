@@ -35,6 +35,9 @@ function dlgLot(lot, prefill) {
   // loại chưa có lô nào (kể cả loại mới tạo trong form) thì 1 đơn vị niêm yết của loại
   const lastW = (typeId, newUnit = 'luong') => [...D.vang.lo].reverse().find(l => l.loai_id === typeId)?.trong_luong_mon_dem ||
     UNIT_DEM[typeId === '__new' ? newUnit : typeById(typeId)?.don_vi_niem_yet || 'chi'];
+  // Giá tiệm bán ra lúc mua: của chính ngày mua, chưa có thì lần nhập gần nhất trước đó trong vòng 30 ngày.
+  // Dùng để điền sẵn đơn giá và kiểm tra lệch 15%, kể cả lô mua hôm qua mà sáng nay mới nhập (lúc đó giá mới nhất là của hôm nay)
+  const buyRef = (typeId, ngay) => { const b = typeById(typeId) && validDate(ngay) ? basePrice(typeId, ngay) : null; return b && b.ban_ra && days(b.ngay, ngay) <= 30 ? b : null; };
   const defType = prefill?.loai_id || D.vang.lo.at(-1)?.loai_id || D.vang.loai[0]?.id || '__new';
   lot = lot || Object.assign({ ngay_mua: today(), loai_id: defType, so_mon: 1, trong_luong_mon_dem: lastW(defType), tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' }, prefill || {});
   // wTouched: đã gõ trọng lượng, không tự đổi theo loại nữa. wPrefill: trọng lượng đang là số điền sẵn,
@@ -83,10 +86,11 @@ function dlgLot(lot, prefill) {
         return tell('Lô đã có lần bán tính giá theo ' + UNIT_NAME[typeById(lot.loai_id)?.don_vi_niem_yet] + ', không đổi sang loại vàng có đơn vị niêm yết khác được.'), false;
       if (isEdit && soldMon(lot.id) > 0 && loai === '__new' && f.dv_moi.value !== typeById(lot.loai_id)?.don_vi_niem_yet)
         return tell('Lô đã có lần bán, loại mới phải cùng đơn vị niêm yết với loại cũ.'), false;
-      { // chống gõ nhầm đơn giá (nhầm giá lượng/chỉ, thừa/thiếu số 0) với lô mua gần đây
-        const unit = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet, p = loai === '__new' ? null : latestPrice(loai);
+      { // chống gõ nhầm đơn giá (nhầm giá lượng/chỉ, thừa/thiếu số 0) so với giá tiệm bán ra lúc mua; sửa lô thì chỉ xét khi đổi giá, số món, trọng lượng, loại hay ngày
+        const unit = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet, p = buyRef(loai, f.ngay.value);
         const dg = tong / (n * wd / UNIT_DEM[unit]);
-        if (p && p.ban_ra && f.ngay.value >= p.ngay && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
+        const touched = !isEdit || tong !== lot.tong_tien_mua || n !== lot.so_mon || wd !== lot.trong_luong_mon_dem || loai !== lot.loai_id || f.ngay.value !== lot.ngay_mua;
+        if (p && touched && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
           !ask(`Đơn giá ${fmtM(dg)}/${UNIT_NAME[unit]} lệch ${fmtP(dg / p.ban_ra - 1)} so với giá tiệm bán ra ngày ${fmtD(p.ngay)} (${fmtM(p.ban_ra)}). Giá này có đúng không?`)) return false;
       }
       const lim = D.tham_so.vang_han_muc_von;
@@ -133,9 +137,9 @@ function dlgLot(lot, prefill) {
       $('#wInfo').innerHTML = n > 0 && wd > 0 ? `Mỗi món <b>${fmtW(wd)}</b> · cả lô <b>${fmtW(n * wd)}</b>${fmtW(n * wd) !== qtyStr ? ' = ' + qtyStr : ''}` : '';
       const tgt = e.target && e.target.name;
       if (tgt === 'don_gia') last = 'dg'; else if (tgt === 'tong') last = 'tong';
-      // Lô mới: tự điền đơn giá = giá tiệm bán ra mới nhất của loại, cho tới khi bạn tự gõ giá
+      // Lô mới: tự điền đơn giá = giá tiệm bán ra lúc mua (theo ô Ngày mua), cho tới khi bạn tự gõ giá
       if (tgt === 'don_gia' || tgt === 'tong') autoPrice = false;
-      if (autoPrice && !isNew) { const p = latestPrice(f.loai.value); f.don_gia.value = p && p.ban_ra && f.ngay.value >= p.ngay ? fmtIn(p.ban_ra) : ''; last = 'dg'; }
+      if (autoPrice && !isNew) { const p = buyRef(f.loai.value, f.ngay.value); f.don_gia.value = p ? fmtIn(p.ban_ra) : ''; last = 'dg'; }
       if (qty) {
         if (last === 'dg') f.tong.value = fmtIn(parseM(f.don_gia.value) * qty);
         else if (tgt !== 'don_gia') f.don_gia.value = fmtIn(parseM(f.tong.value) / qty);
@@ -222,7 +226,8 @@ function dlgHold(lotId) {
       : `Lô đang lời <b class="pos">${fmtP(s.g)}</b>, đã vượt mục tiêu ${fmtP(s.kv, false)}. Lô chuyển sang nhóm Giữ; app nhắc lại khi lời đạt mục tiêu mới, hoặc khi lời tụt về dưới mức nhắc.`}</p>
     <div class="row"><label class="field"><span>Mục tiêu mới (%)</span><input type="number" step="0.1" name="kv" value="${defKv}"><span id="kvInfo"></span></label>
       <label class="field"><span>Nhắc chốt nếu lời tụt về (%)</span><input type="number" step="0.1" name="nt" value="${defNt}" placeholder="trống = không nhắc"><span id="ntInfo"></span></label></div>
-    <p class="small muted">Giá tiệm mua vào hiện tại: ${fmtM(s.P)}/${unit}.</p>
+    ${s.p.ngay < today() ? `<p class="small old">Giá tiệm mua vào ngày ${fmtD(s.p.ngay)}: ${fmtM(s.P)}/${unit}, chưa phải giá hôm nay; nên cập nhật giá trước khi quyết định.</p>`
+      : `<p class="small muted">Giá tiệm mua vào hôm nay: ${fmtM(s.P)}/${unit}.</p>`}
     <div class="dlg-actions"><button value="cancel" type="submit">Hủy</button><button class="primary" type="submit">${tiep ? 'Giữ tiếp' : 'Lưu mục tiêu mới'}</button></div>`,
     f => {
       const kv = parseN(f.kv.value), ntRaw = f.nt.value.trim(), nt = ntRaw === '' ? null : parseN(ntRaw);

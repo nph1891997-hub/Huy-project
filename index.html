@@ -179,17 +179,23 @@ const NF = new Intl.NumberFormat('vi-VN'), NF1 = new Intl.NumberFormat('vi-VN', 
   NFP = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const digits = x => (x == null || x === '' || isNaN(x)) ? '' : NF.format(Math.round(x));
 // Nhập tiền: "118.500.000", "118500000", "118,5" hoặc "118.5" (số nhỏ hơn 1.000 hiểu là triệu),
-// "148.500" hoặc "148500" (từ 1.000 đến dưới 1.000.000 hiểu là nghìn đồng, như bảng giá các tiệm), "118,5tr", "500k";
-// ghi kèm "đ" thì đúng số đồng như gõ ("500.000đ")
+// "148.500" hoặc "148500" (từ 1.000 đến dưới 1.000.000 hiểu là nghìn đồng, như bảng giá các tiệm).
+// Ghi kèm đơn vị thì theo đơn vị: "1,5 tỷ", "118,5tr", "118,5 triệu", "500k", "500 nghìn"; "500.000đ" là đúng số đồng như gõ.
+// Kiểu nói "1tỷ2", "2tr5" là 1,2 tỷ, 2,5 triệu
+const MONEY_UNIT = /^(.*?\d)(tỷ|tỉ|ty|triệu|trieu|tr|nghìn|nghin|ngàn|ngan|k|đồng|dong|vnđ|vnd|đ|d)(\d*)$/;
 function parseM(s) {
-  let t = String(s ?? '').toLowerCase().replace(/\s/g, ''), mult = 1;
-  const exact = t.endsWith('đ'); t = t.replace(/đ/g, '');
-  if (t.endsWith('tr')) { mult = 1e6; t = t.slice(0, -2); } else if (t.endsWith('k')) { mult = 1e3; t = t.slice(0, -1); }
+  let t = String(s ?? '').toLowerCase().replace(/\s/g, ''), mult = 0;   // 0: không ghi đơn vị
+  const u = t.match(MONEY_UNIT);
+  if (u) {
+    mult = /^t[ỷỉy]/.test(u[2]) ? 1e9 : u[2].startsWith('tr') ? 1e6 : /^(ng|k)/.test(u[2]) ? 1e3 : 1;
+    if (u[3] && !/^\d+$/.test(u[1])) return 0;
+    t = u[3] ? u[1] + ',' + u[3] : u[1];
+  }
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');      // dấu phẩy là phần thập phân
   else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');  // 11.700.000 → dấu chấm ngăn nghìn
   const v = parseFloat(t.replace(/[^\d.]/g, ''));
   if (!isFinite(v) || v <= 0) return 0;
-  if (mult === 1 && !exact) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;
+  if (!mult) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;
   return Math.round(v * mult);
 }
 // Số tiền viết vào ô nhập: dưới 1 triệu thì kèm "đ", để đọc lại (bấm Lưu) không bị hiểu thành nghìn đồng
@@ -250,6 +256,9 @@ const setMark = v => { try { localStorage.setItem(SYNC_KEY, v); } catch { } };
 // thời điểm sửa file và cap_nhat. Dùng để biết nơi lưu có bị tab/máy khác sửa không.
 let seen = { mod: null, cap: (() => { try { return localStorage.getItem(CAP_KEY) ?? ''; } catch { return ''; } })() };
 let gen = 0;   // tăng mỗi khi nạp dữ liệu từ nơi khác: các lần lưu xếp hàng từ trước đó bỏ đi
+// Hàng đợi đọc/ghi nơi lưu: lần sau chờ lần trước xong. Một lần gặp lỗi bất ngờ thì báo đỏ rồi đi tiếp:
+// nếu để promise bị từ chối thì mọi lần lưu xếp sau đều bị bỏ qua: số liệu sửa trên màn hình mà không bao giờ vào file
+const enqueue = fn => { saveChain = saveChain.then(fn).catch(e => { console.error(e); setStatus('Lỗi khi lưu: ' + (e?.message || e), true); }); };
 const stamp = () => { const n = new Date(); return `${today()}-${String(n.getHours()).padStart(2, '0')}h${String(n.getMinutes()).padStart(2, '0')}`; };
 // Tên các file app tự tải về (đều là bản sao lưu, không phải file dữ liệu): đặt một chỗ, để "Mở file khác…" nhận ra mọi tên
 const DL = { saoLuu: 'sao-luu-vang-', trinhDuyet: 'ban-trinh-duyet-', truocKhoiPhuc: 'tai-san-truoc-khoi-phuc-', cu: 'du-lieu-cu-trong-trinh-duyet-' };
@@ -286,7 +295,7 @@ function adopt(F, mod) {
 function persist() {
   D.cap_nhat = new Date().toISOString();
   const compact = lastJSON = JSON.stringify(D), text = fileHandle ? JSON.stringify(D, null, 2) : '', ts = D.cap_nhat, h = fileHandle, myGen = gen;
-  saveChain = saveChain.then(async () => {
+  enqueue(async () => {
     if (myGen !== gen) return;                     // dữ liệu đã được nạp lại từ nơi khác sau lần thay đổi này
     const ext = await storeChanged();              // trước mỗi lần lưu: nơi lưu bị sửa ở nơi khác thì không ghi đè
     if (ext) {
@@ -322,7 +331,7 @@ function persist() {
 // Quay lại tab hoặc cửa sổ: nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
 function checkOnReturn() {
   if (document.visibilityState !== 'visible' || VIEW || booting || (!fileHandle && pendingHandle)) return;
-  saveChain = saveChain.then(async () => {
+  enqueue(async () => {
     const ext = await storeChanged(); if (!ext) return;
     const hadDlg = adopt(ext.F, ext.mod);
     ui.notice = 'Dữ liệu vừa được cập nhật ở nơi khác (tab hoặc máy khác); app đã nạp bản mới.' + (hadDlg ? ' Hộp thoại đang mở đã đóng lại, hãy mở lại thao tác.' : '');
@@ -603,12 +612,12 @@ function buyCell(t, ngay, mv, br, fresh) {
   return `⚪ Chưa tới<br><span class="small muted">mua khi bán ra ≤ ${fmtTr(b.near)} (còn cách ${fmtP(b.gap, false)})</span>` + few;
 }
 // Giá dùng cho gợi ý mua của một loại: giá đang gõ trong bảng giá (f), hoặc giá đã lưu khi chưa có bảng.
-// fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ khác giá cũ, hoặc tick Không đổi)
+// fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ, kể cả gõ lại đúng giá cũ, hoặc tick Không đổi)
 function priceVals(t, f) {
   const ngay = f ? (validDate(f.ngay.value) ? f.ngay.value : today()) : ui.priceDate, lp = basePrice(t.id, ngay);
   if (!f) return { lp, ngay, mv: lp?.mua_vao, br: lp?.ban_ra, fresh: !!lp && lp.ngay === ngay };
   const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
-  const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
+  const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br || f['mv_' + t.id].closest('tr.prow')?.dataset.typed);
   return { lp, ngay, mv, br, fresh: (!!lp && lp.ngay === ngay) || !!changed || !!f['kd_' + t.id]?.checked };
 }
 // Tính lại cột Mua thêm? và phần Vì sao? theo giá đang gõ (chưa cần bấm Cập nhật)
@@ -836,6 +845,7 @@ const setPrice = row => { D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.n
 function resetRow(f, id) {
   const b = basePrice(id, ui.priceDate), br = f['br_' + id];
   f['mv_' + id].value = b ? fmtIn(b.mua_vao) : ''; br.value = b && b.ban_ra ? fmtIn(b.ban_ra) : ''; delete br.dataset.touched;
+  delete br.closest('tr.prow').dataset.typed;
   refreshBuy(f);
 }
 function saveRow(id) {
@@ -844,7 +854,10 @@ function saveRow(id) {
   const t = typeById(id), ngay = f.ngay.value, base = basePrice(id, validDate(ngay) ? ngay : ui.priceDate);
   const mv = parseM(f['mv_' + id].value), br = parseM(f['br_' + id].value) || null;
   if (!mv) return resetRow(f, id);
-  if (base && base.mua_vao === mv && (base.ban_ra || null) === br) return;   // không đổi gì
+  // Gõ lại đúng giá điền sẵn (tiệm giữ giá) cho ngày chưa có giá: ghi nhận như tick Không đổi.
+  // Chỉ lướt qua dòng (Enter, Tab, bấm vào rồi ra, không gõ gì) thì không lưu, để giá cũ không thành giá hôm nay
+  const same = base && base.mua_vao === mv && (base.ban_ra || null) === br;
+  if (same && !(f['mv_' + id].closest('tr.prow').dataset.typed && validDate(ngay) && base.ngay < ngay)) return;
   if (!ngay) return tell('Chưa nhập ngày.');
   if (ngay > today()) return tell('Ngày nhập giá không được sau hôm nay.');
   if (!validDate(ngay)) return tell('Ngày chưa hợp lệ.');
@@ -858,7 +871,7 @@ function saveRow(id) {
     : `${t.ten}: giá ${fmtM(mv)} lệch ${fmtP(mv / ref - 1)} so với đơn giá lô ${lot0.id} (${fmtM(ref)}).\n\nGiá này có đúng không?`)) return resetRow(f, id);
   setPrice({ ngay, loai_id: id, mua_vao: mv, ban_ra: br });
   if (VIEW) ui.viewTemp = true;
-  commit(`giá ${t.ten} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
+  commit(`giá ${t.ten}${same ? ' không đổi' : ''} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
   if (rolled && ngay === today()) setNotice(newDayNote());
 }
 // Tick Không đổi / Tất cả không đổi (ids trống = mọi dòng chưa có giá): ghi nhận giá điền sẵn cho ngày đang chọn
@@ -1008,7 +1021,7 @@ function cashPlans(X) {
   const C = prune(fill(loss, fill(prof.slice().sort((a, b) => a.g - b.g))));
   const toPlan = (name, desc, rows) => ({ name, desc, rows: rows.map(x => ({ id: x.s.lot.id, k: x.k })) });
   const plans = [
-    toPlan('A. Chốt lời tốt nhất', 'Lô đạt mục tiêu trước, rồi lô lời % cao nhất', A),
+    toPlan('A. Chốt lời tốt nhất', 'Lô đang ở nhóm Nên chốt trước (đạt mục tiêu hoặc lời tụt dưới mức nhắc), rồi lô lời % cao nhất', A),
     toPlan('B. Ít lô nhất', 'Ưu tiên một lô bán vừa đủ, hạn chế cắt lẻ nhiều lô', B),
     toPlan('C. Giữ lô tốt', 'Bán lô lời ít trước, giữ lô lời nhiều cho chạy tiếp', C)
   ];
@@ -1034,7 +1047,7 @@ function planSummary(plan, X) {
 const r_ = () => r();
 function viewCanTien() {
   let html = card('Cần tiền', `<form id="cashForm"><div class="row">
-    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="0" required style="width:200px"></label>
+    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="VD: 200 (triệu), 1,5 tỷ" required style="width:200px"></label>
     <button class="primary" type="submit">Gợi ý</button></div></form>
     <p class="muted small">Tính theo giá tiệm mua vào gần nhất của từng loại. Không đụng lô lỗ nếu các lô lời đã đủ tiền; thiếu thì lấy lô lỗ ít % nhất trước. Bán theo từng món nên có thể dư một chút. Giá thực tế ở tiệm khác thì sửa lại lần bán ở tab Lịch sử.</p>`);
   if (!ui.plans) return html;
@@ -1185,6 +1198,9 @@ function dlgLot(lot, prefill) {
   // loại chưa có lô nào (kể cả loại mới tạo trong form) thì 1 đơn vị niêm yết của loại
   const lastW = (typeId, newUnit = 'luong') => [...D.vang.lo].reverse().find(l => l.loai_id === typeId)?.trong_luong_mon_dem ||
     UNIT_DEM[typeId === '__new' ? newUnit : typeById(typeId)?.don_vi_niem_yet || 'chi'];
+  // Giá tiệm bán ra lúc mua: của chính ngày mua, chưa có thì lần nhập gần nhất trước đó trong vòng 30 ngày.
+  // Dùng để điền sẵn đơn giá và kiểm tra lệch 15%, kể cả lô mua hôm qua mà sáng nay mới nhập (lúc đó giá mới nhất là của hôm nay)
+  const buyRef = (typeId, ngay) => { const b = typeById(typeId) && validDate(ngay) ? basePrice(typeId, ngay) : null; return b && b.ban_ra && days(b.ngay, ngay) <= 30 ? b : null; };
   const defType = prefill?.loai_id || D.vang.lo.at(-1)?.loai_id || D.vang.loai[0]?.id || '__new';
   lot = lot || Object.assign({ ngay_mua: today(), loai_id: defType, so_mon: 1, trong_luong_mon_dem: lastW(defType), tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' }, prefill || {});
   // wTouched: đã gõ trọng lượng, không tự đổi theo loại nữa. wPrefill: trọng lượng đang là số điền sẵn,
@@ -1233,10 +1249,11 @@ function dlgLot(lot, prefill) {
         return tell('Lô đã có lần bán tính giá theo ' + UNIT_NAME[typeById(lot.loai_id)?.don_vi_niem_yet] + ', không đổi sang loại vàng có đơn vị niêm yết khác được.'), false;
       if (isEdit && soldMon(lot.id) > 0 && loai === '__new' && f.dv_moi.value !== typeById(lot.loai_id)?.don_vi_niem_yet)
         return tell('Lô đã có lần bán, loại mới phải cùng đơn vị niêm yết với loại cũ.'), false;
-      { // chống gõ nhầm đơn giá (nhầm giá lượng/chỉ, thừa/thiếu số 0) với lô mua gần đây
-        const unit = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet, p = loai === '__new' ? null : latestPrice(loai);
+      { // chống gõ nhầm đơn giá (nhầm giá lượng/chỉ, thừa/thiếu số 0) so với giá tiệm bán ra lúc mua; sửa lô thì chỉ xét khi đổi giá, số món, trọng lượng, loại hay ngày
+        const unit = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet, p = buyRef(loai, f.ngay.value);
         const dg = tong / (n * wd / UNIT_DEM[unit]);
-        if (p && p.ban_ra && f.ngay.value >= p.ngay && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
+        const touched = !isEdit || tong !== lot.tong_tien_mua || n !== lot.so_mon || wd !== lot.trong_luong_mon_dem || loai !== lot.loai_id || f.ngay.value !== lot.ngay_mua;
+        if (p && touched && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
           !ask(`Đơn giá ${fmtM(dg)}/${UNIT_NAME[unit]} lệch ${fmtP(dg / p.ban_ra - 1)} so với giá tiệm bán ra ngày ${fmtD(p.ngay)} (${fmtM(p.ban_ra)}). Giá này có đúng không?`)) return false;
       }
       const lim = D.tham_so.vang_han_muc_von;
@@ -1283,9 +1300,9 @@ function dlgLot(lot, prefill) {
       $('#wInfo').innerHTML = n > 0 && wd > 0 ? `Mỗi món <b>${fmtW(wd)}</b> · cả lô <b>${fmtW(n * wd)}</b>${fmtW(n * wd) !== qtyStr ? ' = ' + qtyStr : ''}` : '';
       const tgt = e.target && e.target.name;
       if (tgt === 'don_gia') last = 'dg'; else if (tgt === 'tong') last = 'tong';
-      // Lô mới: tự điền đơn giá = giá tiệm bán ra mới nhất của loại, cho tới khi bạn tự gõ giá
+      // Lô mới: tự điền đơn giá = giá tiệm bán ra lúc mua (theo ô Ngày mua), cho tới khi bạn tự gõ giá
       if (tgt === 'don_gia' || tgt === 'tong') autoPrice = false;
-      if (autoPrice && !isNew) { const p = latestPrice(f.loai.value); f.don_gia.value = p && p.ban_ra && f.ngay.value >= p.ngay ? fmtIn(p.ban_ra) : ''; last = 'dg'; }
+      if (autoPrice && !isNew) { const p = buyRef(f.loai.value, f.ngay.value); f.don_gia.value = p ? fmtIn(p.ban_ra) : ''; last = 'dg'; }
       if (qty) {
         if (last === 'dg') f.tong.value = fmtIn(parseM(f.don_gia.value) * qty);
         else if (tgt !== 'don_gia') f.don_gia.value = fmtIn(parseM(f.tong.value) / qty);
@@ -1372,7 +1389,8 @@ function dlgHold(lotId) {
       : `Lô đang lời <b class="pos">${fmtP(s.g)}</b>, đã vượt mục tiêu ${fmtP(s.kv, false)}. Lô chuyển sang nhóm Giữ; app nhắc lại khi lời đạt mục tiêu mới, hoặc khi lời tụt về dưới mức nhắc.`}</p>
     <div class="row"><label class="field"><span>Mục tiêu mới (%)</span><input type="number" step="0.1" name="kv" value="${defKv}"><span id="kvInfo"></span></label>
       <label class="field"><span>Nhắc chốt nếu lời tụt về (%)</span><input type="number" step="0.1" name="nt" value="${defNt}" placeholder="trống = không nhắc"><span id="ntInfo"></span></label></div>
-    <p class="small muted">Giá tiệm mua vào hiện tại: ${fmtM(s.P)}/${unit}.</p>
+    ${s.p.ngay < today() ? `<p class="small old">Giá tiệm mua vào ngày ${fmtD(s.p.ngay)}: ${fmtM(s.P)}/${unit}, chưa phải giá hôm nay; nên cập nhật giá trước khi quyết định.</p>`
+      : `<p class="small muted">Giá tiệm mua vào hôm nay: ${fmtM(s.P)}/${unit}.</p>`}
     <div class="dlg-actions"><button value="cancel" type="submit">Hủy</button><button class="primary" type="submit">${tiep ? 'Giữ tiếp' : 'Lưu mục tiêu mới'}</button></div>`,
     f => {
       const kv = parseN(f.kv.value), ntRaw = f.nt.value.trim(), nt = ntRaw === '' ? null : parseN(ntRaw);
@@ -1522,6 +1540,7 @@ document.addEventListener('input', e => {
   if (el.name === 'ngay') {   // ngày hợp lệ: các dòng giá điền theo ngày đó; đang gõ dở (trống, chưa hợp lệ) thì để yên
     if (validDate(el.value) && el.value !== ui.priceDate) { ui.priceDate = el.value; return applyPriceDate(f); }
   }
+  if (el.matches('input.money')) el.closest('tr.prow').dataset.typed = '1';   // đã gõ vào dòng này (kể cả gõ lại đúng giá cũ): rời dòng là ghi nhận
   if (el.name.startsWith('br_')) el.dataset.touched = '1';
   if (el.name.startsWith('mv_')) {
     const br = f['br_' + el.name.slice(3)], mv = parseM(el.value);

@@ -132,6 +132,7 @@ document.addEventListener('input', e => {
   if (el.name === 'ngay') {   // ngày hợp lệ: các dòng giá điền theo ngày đó; đang gõ dở (trống, chưa hợp lệ) thì để yên
     if (validDate(el.value) && el.value !== ui.priceDate) { ui.priceDate = el.value; return applyPriceDate(f); }
   }
+  if (el.matches('input.money')) el.closest('tr.prow').dataset.typed = '1';   // đã gõ vào dòng này (kể cả gõ lại đúng giá cũ): rời dòng là ghi nhận
   if (el.name.startsWith('br_')) el.dataset.touched = '1';
   if (el.name.startsWith('mv_')) {
     const br = f['br_' + el.name.slice(3)], mv = parseM(el.value);

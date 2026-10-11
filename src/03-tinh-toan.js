@@ -161,12 +161,12 @@ function buyCell(t, ngay, mv, br, fresh) {
   return `⚪ Chưa tới<br><span class="small muted">mua khi bán ra ≤ ${fmtTr(b.near)} (còn cách ${fmtP(b.gap, false)})</span>` + few;
 }
 // Giá dùng cho gợi ý mua của một loại: giá đang gõ trong bảng giá (f), hoặc giá đã lưu khi chưa có bảng.
-// fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ khác giá cũ, hoặc tick Không đổi)
+// fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ, kể cả gõ lại đúng giá cũ, hoặc tick Không đổi)
 function priceVals(t, f) {
   const ngay = f ? (validDate(f.ngay.value) ? f.ngay.value : today()) : ui.priceDate, lp = basePrice(t.id, ngay);
   if (!f) return { lp, ngay, mv: lp?.mua_vao, br: lp?.ban_ra, fresh: !!lp && lp.ngay === ngay };
   const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
-  const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
+  const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br || f['mv_' + t.id].closest('tr.prow')?.dataset.typed);
   return { lp, ngay, mv, br, fresh: (!!lp && lp.ngay === ngay) || !!changed || !!f['kd_' + t.id]?.checked };
 }
 // Tính lại cột Mua thêm? và phần Vì sao? theo giá đang gõ (chưa cần bấm Cập nhật)

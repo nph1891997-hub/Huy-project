@@ -22,17 +22,23 @@ const NF = new Intl.NumberFormat('vi-VN'), NF1 = new Intl.NumberFormat('vi-VN', 
   NFP = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const digits = x => (x == null || x === '' || isNaN(x)) ? '' : NF.format(Math.round(x));
 // Nhập tiền: "118.500.000", "118500000", "118,5" hoặc "118.5" (số nhỏ hơn 1.000 hiểu là triệu),
-// "148.500" hoặc "148500" (từ 1.000 đến dưới 1.000.000 hiểu là nghìn đồng, như bảng giá các tiệm), "118,5tr", "500k";
-// ghi kèm "đ" thì đúng số đồng như gõ ("500.000đ")
+// "148.500" hoặc "148500" (từ 1.000 đến dưới 1.000.000 hiểu là nghìn đồng, như bảng giá các tiệm).
+// Ghi kèm đơn vị thì theo đơn vị: "1,5 tỷ", "118,5tr", "118,5 triệu", "500k", "500 nghìn"; "500.000đ" là đúng số đồng như gõ.
+// Kiểu nói "1tỷ2", "2tr5" là 1,2 tỷ, 2,5 triệu
+const MONEY_UNIT = /^(.*?\d)(tỷ|tỉ|ty|triệu|trieu|tr|nghìn|nghin|ngàn|ngan|k|đồng|dong|vnđ|vnd|đ|d)(\d*)$/;
 function parseM(s) {
-  let t = String(s ?? '').toLowerCase().replace(/\s/g, ''), mult = 1;
-  const exact = t.endsWith('đ'); t = t.replace(/đ/g, '');
-  if (t.endsWith('tr')) { mult = 1e6; t = t.slice(0, -2); } else if (t.endsWith('k')) { mult = 1e3; t = t.slice(0, -1); }
+  let t = String(s ?? '').toLowerCase().replace(/\s/g, ''), mult = 0;   // 0: không ghi đơn vị
+  const u = t.match(MONEY_UNIT);
+  if (u) {
+    mult = /^t[ỷỉy]/.test(u[2]) ? 1e9 : u[2].startsWith('tr') ? 1e6 : /^(ng|k)/.test(u[2]) ? 1e3 : 1;
+    if (u[3] && !/^\d+$/.test(u[1])) return 0;
+    t = u[3] ? u[1] + ',' + u[3] : u[1];
+  }
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');      // dấu phẩy là phần thập phân
   else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');  // 11.700.000 → dấu chấm ngăn nghìn
   const v = parseFloat(t.replace(/[^\d.]/g, ''));
   if (!isFinite(v) || v <= 0) return 0;
-  if (mult === 1 && !exact) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;
+  if (!mult) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;
   return Math.round(v * mult);
 }
 // Số tiền viết vào ô nhập: dưới 1 triệu thì kèm "đ", để đọc lại (bấm Lưu) không bị hiểu thành nghìn đồng

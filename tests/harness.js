@@ -90,8 +90,15 @@ async function machine(browser, disk, { name = 'A', fsa = true, tz = 'Asia/Ho_Ch
     await page.addInitScript(() => { if (window.__permInit && window.__perm) Object.assign(window.__perm, window.__permInit); });
     if (opts.time) await page.clock.setSystemTime(opts.time);
     await page.goto(URL);
-    await page.evaluate(() => { window.download = (n, t) => window.__dl.push({ name: n, text: t }); });
-    await page.waitForTimeout(150);
+    // Đếm thao tác (act) đang chạy dở, kể cả phần bất đồng bộ (xin quyền, đọc/ghi file), để T.idle biết khi nào app rảnh
+    await page.evaluate(() => {
+      window.download = (n, t) => window.__dl.push({ name: n, text: t });
+      window.__busy = 0;
+      for (const k of Object.keys(act)) { const f = act[k]; act[k] = (...a) => { window.__busy++; let r; try { r = f(...a); } catch (e) { window.__busy--; throw e; } return Promise.resolve(r).finally(() => window.__busy--); }; }
+    });
+    // Mở xong: dòng trạng thái luôn có chữ khi khởi động xong (đã mở file, màn chờ, chưa kết nối file, chế độ xem)
+    await page.waitForFunction(() => document.getElementById('status').textContent !== '', null, { timeout: 5000 }).catch(() => { });
+    await T.idle(page);
     m.pages.push(page);
     return page;
   };
@@ -102,12 +109,19 @@ async function machine(browser, disk, { name = 'A', fsa = true, tz = 'Asia/Ho_Ch
 const T = {
   // Đợi app vẽ lại xong (softRender hẹn giờ 0 ms; máy chậm thì có thể trễ hơn mọi waitForTimeout ngắn)
   settle: async page => { await page.waitForFunction(() => !softPending && !softTimer).catch(() => { }); await page.waitForTimeout(30); },
+  // Đợi app rảnh: không còn thao tác chạy dở, không còn phần vẽ lại đang chờ, hàng đợi lưu đã ghi xong.
+  // Dùng thay cho chờ cố định: máy chậm (nhiều trình duyệt chạy song song) thì lần ghi file có thể trễ hơn mọi khoảng chờ ngắn
+  idle: async page => {
+    await page.waitForFunction(() => !window.__busy && !softPending && !softTimer, null, { timeout: 10000 }).catch(() => { });
+    await page.evaluate(async () => { let c; do { c = saveChain; await c; } while (c !== saveChain); }).catch(() => { });
+    await page.waitForTimeout(20);
+  },
   // Đổi giờ hệ thống rồi cho app kiểm tra sang ngày như mỗi phút
   day: async (page, time) => { await page.clock.setSystemTime(time); await page.evaluate(() => tickDay()); await T.settle(page); },
   text: async (page, sel) => (await page.locator(sel).first().textContent().catch(() => null))?.replace(/\s+/g, ' ').trim(),
   app: async page => (await page.locator('#app').innerText()).replace(/\s+/g, ' ').trim(),
   status: page => page.locator('#status').textContent(),
-  click: (page, act, id) => page.locator(`[data-act="${act}"]${id ? `[data-id="${id}"]` : ''}`).first().click(),
+  click: async (page, act, id) => { await page.locator(`[data-act="${act}"]${id ? `[data-id="${id}"]` : ''}`).first().click(); await T.idle(page); },
   tab: (page, k) => page.locator(`nav [data-k="${k}"]`).click(),
   dl: page => page.evaluate(() => window.__dl.splice(0)),
   D: page => page.evaluate(() => JSON.parse(JSON.stringify(D))),
@@ -120,7 +134,7 @@ const T = {
     await f.locator(`[name="mv_${typeId}"]`).dispatchEvent('input');
     if (br != null) { await f.locator(`[name="br_${typeId}"]`).fill(String(br)); await f.locator(`[name="br_${typeId}"]`).dispatchEvent('input'); }
     await page.locator('body').click({ position: { x: 5, y: 5 } });   // rời dòng
-    await page.waitForFunction(() => !softPending && !softTimer).catch(() => { }); await page.waitForTimeout(60);
+    await T.idle(page); await page.waitForTimeout(40);
   },
   // Thêm lô qua hộp thoại
   addLot: async (page, { ngay, loai, tenMoi, dvMoi, soMon = 1, w = {}, donGia, tong, kv, nt, sd, ghiChu } = {}) => {

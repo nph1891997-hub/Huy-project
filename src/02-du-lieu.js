@@ -37,6 +37,9 @@ const setMark = v => { try { localStorage.setItem(SYNC_KEY, v); } catch { } };
 // thời điểm sửa file và cap_nhat. Dùng để biết nơi lưu có bị tab/máy khác sửa không.
 let seen = { mod: null, cap: (() => { try { return localStorage.getItem(CAP_KEY) ?? ''; } catch { return ''; } })() };
 let gen = 0;   // tăng mỗi khi nạp dữ liệu từ nơi khác: các lần lưu xếp hàng từ trước đó bỏ đi
+// Hàng đợi đọc/ghi nơi lưu: lần sau chờ lần trước xong. Một lần gặp lỗi bất ngờ thì báo đỏ rồi đi tiếp:
+// nếu để promise bị từ chối thì mọi lần lưu xếp sau đều bị bỏ qua: số liệu sửa trên màn hình mà không bao giờ vào file
+const enqueue = fn => { saveChain = saveChain.then(fn).catch(e => { console.error(e); setStatus('Lỗi khi lưu: ' + (e?.message || e), true); }); };
 const stamp = () => { const n = new Date(); return `${today()}-${String(n.getHours()).padStart(2, '0')}h${String(n.getMinutes()).padStart(2, '0')}`; };
 // Tên các file app tự tải về (đều là bản sao lưu, không phải file dữ liệu): đặt một chỗ, để "Mở file khác…" nhận ra mọi tên
 const DL = { saoLuu: 'sao-luu-vang-', trinhDuyet: 'ban-trinh-duyet-', truocKhoiPhuc: 'tai-san-truoc-khoi-phuc-', cu: 'du-lieu-cu-trong-trinh-duyet-' };
@@ -73,7 +76,7 @@ function adopt(F, mod) {
 function persist() {
   D.cap_nhat = new Date().toISOString();
   const compact = lastJSON = JSON.stringify(D), text = fileHandle ? JSON.stringify(D, null, 2) : '', ts = D.cap_nhat, h = fileHandle, myGen = gen;
-  saveChain = saveChain.then(async () => {
+  enqueue(async () => {
     if (myGen !== gen) return;                     // dữ liệu đã được nạp lại từ nơi khác sau lần thay đổi này
     const ext = await storeChanged();              // trước mỗi lần lưu: nơi lưu bị sửa ở nơi khác thì không ghi đè
     if (ext) {
@@ -109,7 +112,7 @@ function persist() {
 // Quay lại tab hoặc cửa sổ: nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
 function checkOnReturn() {
   if (document.visibilityState !== 'visible' || VIEW || booting || (!fileHandle && pendingHandle)) return;
-  saveChain = saveChain.then(async () => {
+  enqueue(async () => {
     const ext = await storeChanged(); if (!ext) return;
     const hadDlg = adopt(ext.F, ext.mod);
     ui.notice = 'Dữ liệu vừa được cập nhật ở nơi khác (tab hoặc máy khác); app đã nạp bản mới.' + (hadDlg ? ' Hộp thoại đang mở đã đóng lại, hãy mở lại thao tác.' : '');
