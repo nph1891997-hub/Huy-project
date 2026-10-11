@@ -75,6 +75,10 @@ dialog details{margin:6px 0 4px}
 .chart .l-avg{stroke:var(--text);stroke-dasharray:2 3}
 .chart .m-buy{fill:var(--green)}.chart .m-sell{fill:var(--red)}
 .chart .guide{stroke:var(--muted)}
+body.view [data-act="lot-add"],body.view [data-act="lot-edit"],body.view [data-act="lot-del"],body.view [data-act="sell"],body.view [data-act="hold"],
+body.view [data-act="sale-edit"],body.view [data-act="sale-del"],body.view [data-act="rebuy"],body.view [data-act="rebuy-clear"],body.view [data-act="price-del"],
+body.view [data-act="type-del"],body.view [data-act="plan-confirm"],body.view [data-act="buy"],body.view [data-act="export-json"],body.view [data-act="import-json"],
+body.view #btnUndo,body.view #typeForm{display:none!important}
 /* Màn hình hẹp (điện thoại): tab Hôm nay không phải cuộn ngang */
 @media (max-width:639px){
   main{padding:10px}
@@ -196,11 +200,15 @@ function normalize(d) {
   for (const k of ['tiet_kiem', 'cctg', 'dat']) if (!Array.isArray(d[k])) d[k] = [];
   return d;
 }
-let D = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch { return emptyData(); } })();
+const hasFSA = 'showOpenFilePicker' in window;
+// Trình duyệt không ghi thẳng vào file được (điện thoại, Safari, Firefox): chế độ xem, không lưu gì,
+// để không sinh bộ dữ liệu thứ hai lệch với file trên máy tính
+const VIEW = !hasFSA;
+const oldLocal = VIEW ? (() => { try { return localStorage.getItem(KEY); } catch { return null; } })() : null;
+let D = VIEW ? emptyData() : (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch { return emptyData(); } })();
 
 // ----- Lưu: trình duyệt + file -----
 let fileHandle = null, pendingHandle = null, saveChain = Promise.resolve(), saveErrShown = false;
-const hasFSA = 'showOpenFilePicker' in window;
 let booting = hasFSA;   // đang kiểm tra file đã nhớ: chưa hiện gì để không lộ số liệu cũ trong trình duyệt
 function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.className = err ? 'err' : ''; }
 // Mốc đồng bộ: cap_nhat của lần cuối đọc hoặc ghi file thành công (lưu trong trình duyệt, không nằm trong file)
@@ -222,7 +230,7 @@ function persist() {
   } else persistStatus();
 }
 function persistStatus() {
-  if (!hasFSA) setStatus('Đang lưu trong trình duyệt');
+  if (VIEW) setStatus('Chế độ xem');
   else if (pendingHandle) setStatus('Chưa mở file dữ liệu');
   else setStatus('Chưa kết nối file — đang lưu tạm trong trình duyệt', true);
 }
@@ -231,13 +239,14 @@ const undoStack = [];
 let lastJSON = JSON.stringify(D);
 function commit(label = 'thay đổi', opts = {}) {
   _cache = null;
+  if (VIEW) return render();   // chế độ xem: không lưu, không hoàn tác
   if (opts.noUndo) undoStack.length = 0;
   else { undoStack.push({ label, json: lastJSON }); if (undoStack.length > 10) undoStack.shift(); }
   if (ui.plans) ui.plans = cashPlans(ui.cash);
   persist(); lastJSON = JSON.stringify(D); render();
 }
 function undo() {
-  const u = undoStack.pop(); if (!u) return;
+  const u = !VIEW && undoStack.pop(); if (!u) return;
   D = normalize(JSON.parse(u.json)); _cache = null; ui.plans = null;
   persist(); lastJSON = JSON.stringify(D); render();
 }
@@ -463,8 +472,10 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { whyOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+const ui = { viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
 function render() {
+  document.body.classList.toggle('view', VIEW);
+  if (VIEW && !ui.viewLoaded) { $('#tabs').innerHTML = ''; $('#app').innerHTML = viewGate(); return; }
   // Đã nhớ file mà chưa mở được: không hiện số liệu, bản trong trình duyệt có thể cũ hơn file
   if (booting || (hasFSA && !fileHandle && pendingHandle)) {
     $('#tabs').innerHTML = ''; $('#btnUndo').classList.add('hidden');
@@ -474,9 +485,17 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-k="${k}">${n}</button>`).join('');
   const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
   _cache = null;
-  $('#app').innerHTML = (ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '') + fileBanner() + v();
+  $('#app').innerHTML = (VIEW ? `<div class="note">👁 <b>Chế độ xem</b>: không lưu gì, mọi ghi chép làm trên máy tính.${ui.viewTemp ? ' Đang xem với giá vừa gõ.' : ''}
+    <button class="sm" data-act="view-open">Mở file khác để xem</button></div>` : '') + (ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '') + fileBanner() + v();
   const u = undoStack.at(-1), bu = $('#btnUndo');
   bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label;
+}
+const viewDataBtns = () => `<button class="primary" data-act="view-open">Mở tai-san.json để xem</button>` +
+  (oldLocal ? ` <button data-act="view-old">Tải bản dữ liệu cũ trong trình duyệt</button>` : '');
+function viewGate() {
+  return card('👁 Chế độ xem', `<p>Trình duyệt này không ghi thẳng vào file được, nên app chỉ để <b>xem</b>: mở file <b>tai-san.json</b> (từ OneDrive/Google Drive) để biết lô nào nên chốt, có nên mua thêm không. Không lưu gì; mọi ghi chép làm trên máy tính bằng Chrome hoặc Edge.</p>
+    <div class="row">${viewDataBtns()}</div>
+    ${oldLocal ? '<p class="small muted">Trình duyệt này còn dữ liệu do bản cũ của app lưu. Tải về để không mất, rồi mở bằng Khôi phục từ bản sao lưu trên máy tính.</p>' : ''}`);
 }
 function gateView() {
   const n = esc(pendingHandle.name);
@@ -496,6 +515,7 @@ const typeOptions = (sel, withAll) => (withAll ? `<option value="">Tất cả lo
 
 // ===================== Tab: Hôm nay =====================
 function viewHomNay() {
+  if (!D.vang.loai.length && VIEW) return card('', '<p class="muted">File này chưa có loại vàng nào.</p>');
   if (!D.vang.loai.length) return card('Bắt đầu', (hasFSA && !fileHandle && !pendingHandle ? `<p><b>Bước 1.</b> Tạo file lưu dữ liệu (nên đặt trong OneDrive/Google Drive):
       <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button></p>
     <p><b>Bước 2.</b> ` : '<p>') + `Thêm lô vàng đầu tiên, loại vàng tạo ngay trong form: <button class="primary" data-act="lot-add">+ Thêm lô</button></p>`);
@@ -511,7 +531,7 @@ function viewHomNay() {
   }).join('');
   let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" max="${today()}" required></label></div>
     <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${priceRows}</table></div>
-    <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>
+    <div class="row" style="margin-top:10px"><button class="primary" type="submit">${VIEW ? 'Xem với giá này' : 'Cập nhật giá'}</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.${VIEW ? ' Chế độ xem: chỉ tính lại, không lưu.' : ''}</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>
     <details id="buyWhy"${ui.whyOpen ? ' open' : ''}><summary>Vì sao? · Biểu đồ 90 ngày</summary><div id="whyBody">${whyBody()}</div></details>`);
 
   const sts = openLots().map(l => lotState(l));
@@ -738,27 +758,28 @@ function viewLichSu() {
 // ===================== Tab: Tham số =====================
 function viewThamSo() {
   const T = D.tham_so;
-  const f = (k, label, step = '0.1') => `<label class="field"><span>${label}</span><input type="number" step="${step}" data-set="${k}" value="${T[k]}"></label>`;
+  const ro = VIEW ? ' disabled' : '';
+  const f = (k, label, step = '0.1') => `<label class="field"><span>${label}</span><input type="number" step="${step}" data-set="${k}" value="${T[k]}"${ro}></label>`;
   const used = id => D.vang.lo.some(l => l.loai_id === id) || D.vang.gia.some(p => p.loai_id === id);
   return card('Tham số chung', `<div class="row">${f('lai_suat_ngan_hang', 'Lãi suất ngân hàng tham chiếu (%/năm)')}${f('lam_phat', 'Lạm phát (%/năm)')}
       ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', 'Báo sắp đạt khi giá còn cần tăng ≤ (%)')}</div>
     <p class="muted small">So sánh với ngân hàng dùng lãi đơn và lãi suất hiện tại cho toàn bộ thời gian giữ, nên chỉ mang tính tham khảo với lô giữ lâu.</p>`) +
     card('Mua thêm', `<div class="row">${f('vang_mua_giam_pct', 'Mua thêm khi giá giảm từ đỉnh 90 ngày ≥ (%)')}
-      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${T.vang_han_muc_von ? digits(T.vang_han_muc_von) : ''}" placeholder="không giới hạn" style="width:200px"></label></div>
+      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${T.vang_han_muc_von ? digits(T.vang_han_muc_von) : ''}" placeholder="không giới hạn" style="width:200px"${ro}></label></div>
     <p class="muted small">App không đoán giá. Vùng mua: giá tiệm bán ra thấp hơn đỉnh 90 ngày ít nhất bấy nhiêu %; đã mua loại đó trong 90 ngày thì lần sau phải rẻ hơn lần mua gần nhất bấy nhiêu % nữa. Chênh lệch mua–bán cao bất thường thì gợi ý đợi; vốn đang giữ chạm hạn mức thì thôi gợi ý mua.</p>`) +
     card('Loại vàng', `<div class="scroll"><table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
-      ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"></td>
-        <td><select data-type-unit="${esc(t.id)}" ${used(t.id) ? 'disabled title="Loại đã có lô hoặc giá, không đổi đơn vị được"' : ''}>
+      ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"${ro}></td>
+        <td><select data-type-unit="${esc(t.id)}" ${used(t.id) || VIEW ? 'disabled title="Loại đã có lô hoặc giá, không đổi đơn vị được"' : ''}>
           ${unitOptions(t.don_vi_niem_yet)}</select></td>
         <td><button class="sm danger" data-act="type-del" data-id="${esc(t.id)}" ${D.vang.lo.some(l => l.loai_id === t.id) ? 'disabled title="Loại đã có lô, không xóa được"' : ''}>Xóa</button></td></tr>`).join('')}</table></div>
       <form id="typeForm"><div class="row" style="margin-top:10px"><label class="field"><span>Tên loại mới</span><input name="ten" required placeholder="VD: Nhẫn 9999"></label>
         <label class="field"><span>Đơn vị niêm yết</span><select name="dv">${unitOptions('chi')}</select></label>
         <button type="submit">+ Thêm loại</button></div></form>`) +
-    card('Dữ liệu', (hasFSA
+    card('Dữ liệu', VIEW ? `<p>Chế độ xem: trình duyệt này không ghi thẳng vào file được, không lưu gì. Ghi chép làm trên máy tính bằng Chrome hoặc Edge.</p><div class="row">${viewDataBtns()}</div>` : ((hasFSA
       ? `<p>${fileHandle ? `Đang lưu vào file <b>${esc(fileHandle.name)}</b>.` : 'Chưa kết nối file, dữ liệu đang lưu tạm trong trình duyệt.'}</p>
         <div class="row"><button data-act="file-new">Tạo file mới…</button><button data-act="file-open">Mở file khác…</button></div>`
       : `<p>Trình duyệt này không ghi trực tiếp vào file được, dữ liệu lưu trong trình duyệt. Nên dùng Chrome hoặc Edge.</p>`) +
-      `<div class="row"><button data-act="export-json">Tải bản sao lưu</button><button data-act="import-json">Khôi phục từ bản sao lưu…</button></div>`);
+      `<div class="row"><button data-act="export-json">Tải bản sao lưu</button><button data-act="import-json">Khôi phục từ bản sao lưu…</button></div>`));
 }
 
 // ===================== Hộp thoại =====================
@@ -995,6 +1016,8 @@ const act = {
     ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit(`bán theo phương án ${p.name.slice(0, 1)} (${S.rows.length} lô)`);
   },
   undo: () => undo(),
+  'view-open': () => { ui.importMode = 'view'; $('#importFile').click(); },
+  'view-old': () => download(`du-lieu-cu-trong-trinh-duyet-${today()}.json`, oldLocal, 'application/json'),
   'notice-close': () => { ui.notice = ''; render(); },
   'export-json': () => download(`sao-luu-vang-${today()}.json`, JSON.stringify(D, null, 2), 'application/json'),
   'import-json': () => $('#importFile').click(),
@@ -1010,7 +1033,10 @@ const act = {
     }
   }
 };
-document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) act[b.dataset.act](b.dataset, b); });
+// Chế độ xem: các thao tác làm thay đổi dữ liệu bị ẩn (CSS body.view) và chặn luôn ở đây
+const EDIT_ACTS = new Set(['lot-add', 'lot-edit', 'lot-del', 'sell', 'hold', 'sale-edit', 'sale-del', 'rebuy', 'rebuy-clear', 'price-del', 'type-del',
+  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect']);
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled && !(VIEW && EDIT_ACTS.has(b.dataset.act))) act[b.dataset.act](b.dataset, b); });
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
   if (!f || f.id !== 'priceForm') return;
@@ -1048,6 +1074,10 @@ document.addEventListener('submit', e => {
     }
     if (!all.length) return alert('Chưa nhập giá nào.');
     let save = changed.map(x => x.row).concat(ticked);
+    if (VIEW) {   // chỉ tính lại theo giá vừa gõ, không lưu
+      for (const row of save.length ? save : all) { D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.ngay && p.loai_id === row.loai_id)); D.vang.gia.push(row); }
+      ui.viewTemp = true; _cache = null; return render();
+    }
     if (!save.length) {
       if (!confirm(`Giá không đổi so với lần nhập trước. Ghi nhận giá này cho ngày ${fmtD(ngay)}?`)) return;
       save = all;
@@ -1085,9 +1115,11 @@ document.addEventListener('change', e => {
     ui.plans[+el.dataset.plan].rows[+el.dataset.row].k = Math.max(0, Math.floor(parseN(el.value))); render();
   } else if (el.id === 'importFile') {
     const file = el.files[0]; el.value = ''; if (!file) return;
+    const forView = ui.importMode === 'view'; ui.importMode = '';
     file.text().then(text => {
       let F; try { F = JSON.parse(text); } catch { return alert('File không phải JSON hợp lệ.'); }
       if (!F || !F.vang) return alert('File không đúng định dạng dữ liệu của app.');
+      if (forView) { D = normalize(F); ui.viewLoaded = true; ui.viewTemp = false; ui.plans = null; _cache = null; tab = 'homnay'; return render(); }
       if (!confirm('Dữ liệu trong file sẽ THAY THẾ toàn bộ dữ liệu đang mở. Tiếp tục?')) return;
       D = normalize(F); ui.plans = null; commit('khôi phục từ bản sao lưu');
     });
