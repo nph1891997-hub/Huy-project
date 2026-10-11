@@ -270,9 +270,9 @@ function persist() {
     let localOK = true;
     try { localStorage.setItem(KEY, compact); localStorage.setItem(CAP_KEY, ts); } catch (e) { localOK = false; }
     if (!h) {
-      seen = { mod: null, cap: ts };
-      if (localOK) return persistStatus();
-      setStatus('Không lưu được vào trình duyệt (bộ nhớ đầy)', true);
+      // Lần ghi lỗi không tính là đã lưu: lần lưu sau so với lần ghi thành công cuối, không báo nhầm "sửa ở nơi khác"
+      if (localOK) { seen = { mod: null, cap: ts }; return persistStatus(); }
+      setStatus('Chưa lưu được: bộ nhớ trình duyệt đầy', true);
       if (!localErrShown) { localErrShown = true; alert('Không lưu được vào bộ nhớ trình duyệt (có thể đã đầy). Hãy lưu vào file để không mất dữ liệu: Tham số → Dữ liệu → Tạo file mới….'); }
       return;
     }
@@ -350,7 +350,7 @@ async function readData(h) {
 }
 // seenAs: dấu của nội dung đang nằm trong file khi ghi đè có chủ ý (khôi phục, ghi lại vào chính file đang dùng)
 async function useFile(handle, fromNew, seenAs) {
-  let mod = null, fileCap = '';
+  let mod = null, fileCap = '', keepLocal = false;
   if (!fromNew) {
     mod = (await handle.getFile()).lastModified;
     const F = await readData(handle);
@@ -368,13 +368,26 @@ async function useFile(handle, fromNew, seenAs) {
         ui.notice = `Bản trong trình duyệt khác với file <b>${esc(handle.name)}</b> (file đã được sửa ở nơi khác). App dùng dữ liệu trong file; bản trình duyệt đã tải về thành <b>${name}</b>. Cần lấy lại thì vào Tham số → Khôi phục từ bản sao lưu.`;
       }
       D = F;
-    }
+    } else keepLocal = true;
   }
   gen++; seen = seenAs || { mod, cap: fileCap };   // dấu của nội dung đang nằm trong file (kể cả khi giữ bản trình duyệt để ghi vào)
   ui.gateError = ''; ui.gateBad = ui.gateLost = false; ui.gateRestore = null;
   fileHandle = handle; pendingHandle = null;
   try { await idbSet('file', handle); } catch { }
-  commit('', { noUndo: true });
+  if (fromNew || keepLocal) return commit('', { noUndo: true });   // tạo file mới, hoặc đưa bản trình duyệt vào file
+  // Mở file chỉ đọc: không ghi lại file (mở để xem không đổi cap_nhat, không gây xung đột OneDrive).
+  // Bản trong trình duyệt vẫn thay bằng dữ liệu file, kẻo lần mở sau tưởng trình duyệt có thay đổi chưa ghi rồi ghi bản cũ đè file
+  _cache = null; undoStack.length = 0; ui.plans = null;
+  lastJSON = JSON.stringify(D);
+  let localOK = true;
+  try { localStorage.setItem(KEY, lastJSON); localStorage.setItem(CAP_KEY, D.cap_nhat || ''); } catch { localOK = false; }
+  if (localOK) setMark(D.cap_nhat || '');
+  else {   // bộ nhớ trình duyệt đầy: xóa mốc để lần mở sau dùng dữ liệu trong file
+    try { localStorage.removeItem(SYNC_KEY); } catch { }
+    if (!localErrShown) { localErrShown = true; alert('Bộ nhớ trình duyệt đầy; dữ liệu vẫn nằm trong file ' + handle.name + '.'); }
+  }
+  setStatus('Đã mở ' + handle.name);
+  render();
 }
 // Dấu hiện tại của một file (để ghi đè có chủ ý mà không bị coi là "file đã bị sửa ở nơi khác")
 async function fileSeen(h) {
