@@ -574,11 +574,15 @@ function dlgLot(lot, prefill) {
   const isEdit = !!lot;
   const T = D.tham_so;
   const fromSale = prefill && prefill.fromSale;
-  // Lô mới: mặc định loại của lô nhập gần nhất, trọng lượng mỗi món của lô gần nhất cùng loại
-  const lastW = typeId => [...D.vang.lo].reverse().find(l => l.loai_id === typeId)?.trong_luong_mon_dem || (typeById(typeId)?.don_vi_niem_yet === 'luong' ? 10000 : 1000);
+  // Lô mới: mặc định loại của lô nhập gần nhất, trọng lượng mỗi món của lô gần nhất cùng loại;
+  // loại chưa có lô nào (kể cả loại mới tạo trong form) thì 1 đơn vị niêm yết của loại
+  const lastW = (typeId, newUnit = 'luong') => [...D.vang.lo].reverse().find(l => l.loai_id === typeId)?.trong_luong_mon_dem ||
+    UNIT_DEM[typeId === '__new' ? newUnit : typeById(typeId)?.don_vi_niem_yet || 'chi'];
   const defType = D.vang.lo.at(-1)?.loai_id || D.vang.loai[0]?.id || '__new';
   lot = lot || Object.assign({ ngay_mua: today(), loai_id: defType, so_mon: 1, trong_luong_mon_dem: lastW(defType), tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' }, prefill || {});
-  let last = 'tong', autoPrice = !isEdit, wTouched = isEdit || !!(prefill && prefill.trong_luong_mon_dem);
+  // wTouched: đã gõ trọng lượng, không tự đổi theo loại nữa. wPrefill: trọng lượng đang là số điền sẵn,
+  // lần đầu gõ vào một ô thì xóa các ô còn lại (tránh 1 chỉ điền sẵn + gõ 1 lượng = 1 lượng 1 chỉ)
+  let last = 'tong', autoPrice = !isEdit, wTouched = isEdit || !!(prefill && prefill.trong_luong_mon_dem), wPrefill = !isEdit;
   openDlg(`<h2>${isEdit ? 'Sửa lô ' + esc(lot.id) : fromSale ? 'Mua lại (từ lần bán ' + esc(fromSale) + ')' : 'Thêm lô vàng'}</h2>
     <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" max="${today()}" required></label>
       <label class="field"><span>Loại vàng</span><select name="loai">${typeOptions(lot.loai_id)}<option value="__new" ${lot.loai_id === '__new' ? 'selected' : ''}>➕ Loại mới…</option></select></label></div>
@@ -586,7 +590,7 @@ function dlgLot(lot, prefill) {
       <label class="field"><span>Đơn vị niêm yết giá</span><select name="dv_moi">${unitOptions('luong')}</select></label></div>
     <div class="row"><label class="field"><span>Số món</span><input type="number" min="1" name="so_mon" value="${lot.so_mon}" style="width:70px"></label>
       <span style="padding-bottom:6px">×</span> ${wInputs('w', lot.trong_luong_mon_dem)}</div>
-    <p class="small muted" id="wInfo"></p>
+    <p id="wInfo"></p>
     <div class="row"><label class="field"><span id="dgLabel">Đơn giá</span><input class="money" name="don_gia"></label>
       <label class="field"><span>Tổng tiền mua</span><input class="money" name="tong" value="${digits(lot.tong_tien_mua) || ''}"></label></div>
     <div class="row"><label class="field"><span>% kỳ vọng</span><input type="number" step="0.1" name="kv" value="${lot.ky_vong_pct}"></label></div>
@@ -632,12 +636,18 @@ function dlgLot(lot, prefill) {
     (f, e) => {
       const isNew = f.loai.value === '__new';
       $('#newType').classList.toggle('hidden', !isNew);
-      if (e.target && /^w_/.test(e.target.name)) wTouched = true;
-      if (e.target && e.target.name === 'loai' && !wTouched && !isNew) { const o = splitW(lastW(f.loai.value)); for (const [k] of UNITS) f['w_' + k].value = o[k] || ''; }
+      if (e.target && /^w_/.test(e.target.name)) {
+        if (wPrefill) for (const [k] of UNITS) if ('w_' + k !== e.target.name) f['w_' + k].value = '';
+        wTouched = true; wPrefill = false;
+      }
+      if (e.target && (e.target.name === 'loai' || e.target.name === 'dv_moi') && !wTouched) {
+        const o = splitW(lastW(f.loai.value, f.dv_moi.value)); for (const [k] of UNITS) f['w_' + k].value = o[k] || '';
+      }
       const unit = isNew ? f.dv_moi.value : typeById(f.loai.value)?.don_vi_niem_yet || 'chi';
       const n = Math.floor(parseN(f.so_mon.value)), wd = readW(f, 'w'), qty = n * wd / UNIT_DEM[unit];
       $('#dgLabel').textContent = 'Đơn giá (mỗi ' + UNIT_NAME[unit] + ')';
-      $('#wInfo').textContent = n > 0 && wd > 0 ? `Tổng: ${fmtW(n * wd)} = ${qty.toLocaleString('vi-VN', { maximumFractionDigits: 4 })} ${UNIT_NAME[unit]}` : '';
+      const qtyStr = qty.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) + ' ' + UNIT_NAME[unit];
+      $('#wInfo').innerHTML = n > 0 && wd > 0 ? `Mỗi món <b>${fmtW(wd)}</b> · cả lô <b>${fmtW(n * wd)}</b>${fmtW(n * wd) !== qtyStr ? ' = ' + qtyStr : ''}` : '';
       const tgt = e.target && e.target.name;
       if (tgt === 'don_gia') last = 'dg'; else if (tgt === 'tong') last = 'tong';
       // Lô mới: tự điền đơn giá = giá tiệm bán ra mới nhất của loại, cho tới khi bạn tự gõ giá
