@@ -1,0 +1,131 @@
+:root{--bg:#f5f6f8;--card:#fff;--line:#e2e5e9;--text:#1d2329;--muted:#6b7580;--accent:#a8760a;--green:#17803f;--red:#c0392b;--yellow:#a86b00;--blue:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.bar{max-width:1400px;margin:0 auto;padding:8px 16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;margin-right:10px;color:var(--accent)}
+.spacer{flex:1}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;padding:7px 12px;border-radius:6px;cursor:pointer;font:inherit;color:var(--muted)}
+nav button.on{background:#fbf3e0;color:var(--accent);font-weight:600}
+#status{font-size:12px;color:var(--muted)}
+#status.err{color:var(--red)}
+main{max-width:1400px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 10px}
+.card h3{font-size:14px;margin:14px 0 6px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfc}
+td.n,th.n{text-align:right}
+tr.total td{font-weight:600;background:#fafbfc}
+.pos{color:var(--green)}.neg{color:var(--red)}.muted{color:var(--muted)}.small{font-size:12px}
+button,.btn{font:inherit;border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--text)}
+button:hover{border-color:#b9c0c8}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{color:var(--red)}
+button.sm{padding:2px 8px;font-size:12px}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{font:inherit;border:1px solid #cdd3da;border-radius:6px;padding:5px 8px;background:#fff;color:var(--text)}
+input.money{text-align:right;width:150px}
+input.w{width:56px;text-align:right}
+input[type=number]{width:90px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+.field{display:flex;flex-direction:column;gap:3px}
+.field>span{font-size:12px;color:var(--muted)}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;background:#eef1f4}
+.grp-chot h2{color:var(--green)}.grp-sap h2{color:var(--yellow)}.grp-lo h2{color:var(--red)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:10px}
+.stat b{display:block;font-size:18px}
+.stat span{font-size:12px;color:var(--muted)}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:14px}
+.warn{background:#fff4e5;border:1px solid #f3d19c;border-radius:6px;padding:6px 10px;margin:8px 0}
+.note{background:#eef4ff;border:1px solid #c9d8f5;border-radius:6px;padding:8px 10px;margin-bottom:12px}
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;max-width:640px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(20,25,30,.35)}
+dialog form{padding:16px}
+dialog h2{margin:0 0 12px;font-size:17px}
+.dlg-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.preview{background:#fafbfc;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px}
+.preview td{border:0;padding:2px 6px}
+.old{color:var(--yellow)}
+input.olddate{background:#fff4e5;border-color:#f3d19c}
+.hidden{display:none!important}
+.m-only{display:none}
+summary{cursor:pointer;color:var(--muted)}
+details[open] summary{margin-bottom:10px}
+dialog details{margin:6px 0 4px}
+.why{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.why h3{margin:4px 0 6px}
+.why ul{margin:6px 0;padding-left:18px;white-space:normal}
+.legend{font-size:12px;color:var(--muted);margin:4px 0}
+.chart{width:100%;max-width:760px;height:auto;display:block;touch-action:pan-y}
+.chart .axis{stroke:#cdd3da}
+.chart .ax,.chart .lbl{font-size:11px;fill:var(--muted)}
+.chart .l-br{fill:none;stroke:var(--accent);stroke-width:2}
+.chart .l-mv{fill:none;stroke:#b9c0c8;stroke-width:1.2}
+.chart .l-entry{stroke:var(--green);stroke-dasharray:6 4}
+.chart .l-avg{stroke:var(--text);stroke-dasharray:2 3}
+.chart .l-rebuy{stroke:var(--blue);stroke-dasharray:3 3}
+.chart .m-buy{fill:var(--green)}.chart .m-sell{fill:var(--red)}
+.chart .guide{stroke:var(--muted)}
+body.view [data-act="lot-add"],body.view [data-act="lot-edit"],body.view [data-act="lot-del"],body.view [data-act="sell"],body.view [data-act="hold"],
+body.view [data-act="sale-edit"],body.view [data-act="sale-del"],body.view [data-act="rebuy"],body.view [data-act="rebuy-clear"],body.view [data-act="price-del"],
+body.view [data-act="type-del"],body.view [data-act="plan-confirm"],body.view [data-act="buy"],body.view [data-act="export-json"],body.view [data-act="import-json"],
+body.view #btnUndo,body.view #typeForm{display:none!important}
+/* Màn hình hẹp (điện thoại): tab Hôm nay không phải cuộn ngang */
+@media (max-width:639px){
+  main{padding:10px}
+  .card{padding:10px}
+  .bar{padding:6px 10px}
+  #btnUndo{max-width:100%;white-space:normal;text-align:left}
+  dialog td,.preview td{white-space:normal}
+  /* Bảng giá: mỗi loại một khối */
+  #priceForm .scroll{overflow:visible}
+  #priceForm table,#priceForm tbody,table.lots,table.lots tbody,table.cards,table.cards tbody{display:block}
+  #priceForm tr.hd,table.lots tr.hd,table.cards tr.hd{display:none}
+  #priceForm tr.prow{display:grid;grid-template-columns:1fr auto;gap:6px 8px;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
+  #priceForm tr.prow td{border:0;padding:0;white-space:normal}
+  #priceForm .c-ten{font-weight:600}
+  #priceForm .c-dv{text-align:right;color:var(--muted)}
+  #priceForm .c-mv,#priceForm .c-br{grid-column:1/-1;display:flex;align-items:center;gap:8px}
+  #priceForm .c-mv::before{content:"Tiệm mua vào";flex:1;font-size:12px;color:var(--muted)}
+  #priceForm .c-br::before{content:"Tiệm bán ra";flex:1;font-size:12px;color:var(--muted)}
+  #priceForm .c-mv input,#priceForm .c-br input{width:170px}
+  #priceForm .c-buy{grid-column:1/-1}
+  #priceForm .c-be{text-align:left;font-size:12px;color:var(--muted)}
+  #priceForm .c-be::before{content:"Mua hôm nay cần tăng để hòa vốn "}
+  #priceForm .c-note{grid-column:1/-1}
+  #priceForm .c-kd{grid-column:1/-1}
+  #priceForm .c-kd:empty{display:none}
+  /* Nhóm lô: mỗi lô một thẻ */
+  table.lots tr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;border-bottom:1px solid var(--line);padding:8px 0}
+  table.lots td{border:0;padding:0;white-space:normal}
+  table.lots .c-con,table.lots .c-von,table.lots .c-kv,table.lots .c-nh{display:none}
+  table.lots .c-lo{order:1}
+  table.lots .c-pct{order:2;font-size:16px}
+  table.lots .c-loi{order:3;text-align:left}
+  table.lots .c-gt{order:4}
+  table.lots .c-gt::before{content:"giá trị ";color:var(--muted);font-size:12px}
+  table.lots .c-act{order:5;grid-column:1/-1}
+  table.lots .c-act button{padding:5px 12px;font-size:14px;margin-top:2px}
+  /* Bảng nhắc mua lại: thẻ có nhãn */
+  table.cards tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}
+  table.cards td{display:flex;justify-content:space-between;gap:10px;border:0;padding:2px 0;white-space:normal}
+  table.cards td[data-l]::before{content:attr(data-l);color:var(--muted);font-size:12px}
+  /* Cần tiền: mỗi lô của phương án một thẻ (lô, loại | số món bán; tiền thu | lời/lỗ), không cuộn ngang */
+  .m-only{display:inline}
+  table.plan,table.plan tbody{display:block}
+  table.plan tr.hd,table.plan .c-con{display:none}
+  table.plan tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;border-bottom:1px solid var(--line);padding:6px 0}
+  table.plan td{border:0;padding:0;white-space:normal}
+  table.plan .c-lo{grid-column:1;grid-row:1}
+  table.plan .c-loai{grid-column:1;grid-row:2}
+  table.plan .c-k{grid-column:2;grid-row:1/3;align-self:center}
+  table.plan .c-thu{grid-column:1;grid-row:3;text-align:left}
+  table.plan .c-thu::before{content:"thu ";color:var(--muted);font-size:12px}
+  table.plan tr.total{grid-template-columns:1fr auto auto}
+  table.plan tr.total td{grid-row:auto}
+}

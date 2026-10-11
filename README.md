@@ -7,7 +7,7 @@ App một file HTML để quản lý vàng theo lô: nhập giá mỗi ngày, xe
 1. Mở `index.html` bằng **Chrome** hoặc **Edge** (bấm đúp vào file). Không cần cài gì.
 2. Lần đầu: bấm **Tạo file dữ liệu…**, lưu `tai-san.json` vào thư mục bạn muốn (nên để trong OneDrive/Google Drive). Từ đó mọi thay đổi tự lưu vào file này.
 3. Những lần sau: bấm **Mở lại tai-san.json**. Trước khi mở file, app không hiện số liệu để khỏi xem nhầm bản cũ. Nếu Chrome/Edge hỏi quyền và có lựa chọn "Cho phép mỗi lần truy cập", chọn nó để khỏi phải bấm lại.
-4. Dùng chung file trên 2 máy (qua OneDrive/Drive): app tự đối chiếu khi mở file. Nếu cả máy này lẫn file đều có thay đổi, app dùng dữ liệu trong file và tự tải bản của trình duyệt về để không mất.
+4. Dùng chung file trên 2 máy (qua OneDrive/Drive): máy thứ hai bấm **Mở file có sẵn…** và chọn đúng `tai-san.json`, đừng bấm Tạo file dữ liệu (chọn trùng file có sẵn ở hộp Lưu thì Chrome xóa trắng nó). Mở app trên máy kia thì đợi OneDrive báo đồng bộ xong rồi mới sửa; dòng trạng thái ghi giờ sửa lần cuối của dữ liệu để bạn đối chiếu. App tự đối chiếu khi mở file. Nếu cả máy này lẫn file đều có thay đổi, app dùng dữ liệu trong file và tự tải bản của trình duyệt về để không mất.
 
 Nhập giá hằng ngày ở bảng **Giá vàng** (tab Hôm nay): sửa giá xong, **rời dòng hoặc nhấn Enter là lưu**, không cần bấm nút. Gõ giá như bảng niêm yết của tiệm cũng được: `148.500` (nghìn đồng) hay `148,5` (triệu) đều là 148.500.000. Loại nào giá không đổi thì tick **Không đổi**, hoặc bấm **Tất cả không đổi**. Muốn nhập bù ngày cũ thì đổi ô Ngày; ô Ngày giữ ngày đó cho tới khi bấm **Về hôm nay**. Để app mở qua đêm thì sáng hôm sau app tự chuyển sang ngày mới.
 
@@ -20,3 +20,11 @@ Trên điện thoại (hoặc Safari, Firefox), trình duyệt không ghi thẳn
 Sao lưu và khôi phục nằm ở tab **Tham số → Dữ liệu**. File `tai-san.json` hỏng hoặc rỗng thì app không ghi gì vào file; màn chờ chỉ cách lấy lại: lịch sử phiên bản của OneDrive/Drive, **Khôi phục từ bản sao lưu…** (ghi vào đúng `tai-san.json`), hoặc **Dùng bản trong trình duyệt**. Muốn tạo file mới thì đặt tên khác `tai-san.json` đang dùng: Chrome xóa trắng file được chọn ở hộp Lưu.
 
 Đặc tả chi tiết: [`docs/dac-ta-vang.md`](docs/dac-ta-vang.md).
+
+## Dành cho người sửa app
+
+- Nguồn nằm trong `src/` (CSS, khung HTML, 12 file JS chia theo mục). `index.html` là bản ghép, **không sửa tay**: sửa trong `src/` rồi chạy `node build.js`. `node build.js --check` báo nếu `index.html` chưa khớp `src/`.
+- Hộp hỏi / hộp báo dùng `ask` / `tell`, không gọi thẳng `confirm` / `alert` (`build.js --check` sẽ báo).
+- Kiểm thử: `npm install` (chỉ cần Playwright) rồi `npm test`. Bộ `tests/` giả lập 10 kịch bản dùng thật trong Chromium (tạo file, nhập giá, qua đêm, 2 máy, file hỏng, chế độ xem, gợi ý mua bán, phím tắt), không đụng file thật trên máy, chạy khoảng 6 giây. Sửa gì cũng chạy bộ này trước khi gộp; lỗi mới tìm ra thì thêm vào ca tương ứng trong `tests/cases/`.
+- Chạy tay: `npm run perf` đo thời gian trên dữ liệu 20 năm; `npm run screens` chụp màn hình bề rộng điện thoại vào `tests/screens/`.
+- Bộ kiểm thử dùng bản giả của quyền đọc/ghi file. Đổi phần mở/lưu file thì thử tay trên Chrome hoặc Edge: hộp xin quyền khi Mở lại, Tạo file mới…, rời dòng giá bằng cú bấm khi có hộp hỏi.
