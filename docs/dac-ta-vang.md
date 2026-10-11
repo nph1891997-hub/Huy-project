@@ -98,7 +98,7 @@ Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi ti
 - Ô ít dùng (mức báo sắp đạt, ghi chú) nằm trong **"Tùy chọn khác"**, thu gọn mặc định.
 - Một lần mua có nhiều loại món (ví dụ 1 miếng 1 lượng và 1 miếng 5 chỉ) thì nhập thành **2 lô**.
 - Danh sách lô: lọc theo **Đang giữ / Đã đóng / Tất cả** và theo loại vàng.
-- **Sửa lô**: sửa được mọi ô. **Xóa lô**: chỉ được xóa khi lô chưa có lần bán nào.
+- **Sửa lô**: sửa được mọi ô. **Xóa lô**: xóa được cả lô đã bán; khi đó các lần bán của lô bị xóa theo (app hỏi rõ số lần bán sẽ mất).
 - Bấm vào một lô: xem chi tiết và lịch sử bán của lô đó.
 
 ### 2.3 Hộp thoại "Bán"
@@ -112,7 +112,7 @@ Mở từ nút bán ở tab Hôm nay, tab Lô vàng hoặc tab Cần tiền.
 
 - Dưới ô giá ghi rõ giá đang điền sẵn là **giá ngày nào**; giá cũ thì nhắc kiểm tra giá thực tế.
 
-Lô hết món thì tự chuyển sang **Đã đóng**. Mỗi lần bán **sửa được** (ngày, số món, giá, mua lại, ghi chú; dùng cùng hộp thoại) hoặc **hoàn tác** (xóa lần bán đó).
+Lô hết món thì tự chuyển sang **Đã đóng**. Mỗi lần bán **sửa được** (ngày, số món, giá, mua lại, ghi chú; dùng cùng hộp thoại) hoặc **xóa** (số món trả lại cho lô).
 
 ### 2.4 Tab "Cần tiền"
 
@@ -142,7 +142,7 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 
 ### 2.5 Tab "Lịch sử"
 
-- **Lịch sử bán**: lọc theo năm. Mỗi dòng có nút **Sửa** và **Hoàn tác**. Tổng lời đã chốt theo năm.
+- **Lịch sử bán**: lọc theo năm. Mỗi dòng có nút **Sửa** và **Xóa**. Tổng lời đã chốt theo năm.
 - **Lịch sử giá**: hiện 30 dòng gần nhất, có nút xem tất cả. Xóa được từng dòng.
 - **Thống kê theo loại vàng**: vốn đang giữ, giá trị, lời tạm tính, lời đã chốt.
 
@@ -155,6 +155,23 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 | % kỳ vọng mặc định cho lô mới | 15 |
 | Báo sắp đạt khi giá còn cần tăng ≤ (%) | 2 |
 | Danh sách loại vàng | Tên, đơn vị niêm yết (lượng/chỉ/phân/ly/dem). Đổi tên được; chỉ xóa được loại chưa có lô nào |
+
+---
+
+### 2.7 Sửa, xóa và hoàn tác
+
+| Nhập sai gì | Cách sửa |
+|---|---|
+| Thông tin lô (ngày, loại, số món, trọng lượng, giá mua, mục tiêu, ghi chú) | Tab Lô vàng → **Sửa** |
+| Cả lô (nhập nhầm hẳn) | Tab Lô vàng → **Xóa** (kèm các lần bán của lô) |
+| Lần bán (ngày, số món, giá, mua lại, ghi chú) | Tab Lịch sử (hoặc Chi tiết lô) → **Sửa** |
+| Bán nhầm | Tab Lịch sử → **Xóa** lần bán, số món trả lại cho lô |
+| Giá hôm nay | Nhập lại ở tab Hôm nay → Cập nhật giá (đè lên giá cùng ngày) |
+| Giá một ngày cũ | Chọn ngày đó ở ô Ngày rồi nhập lại, hoặc tab Lịch sử → Lịch sử giá → **Xóa** |
+| Nâng mục tiêu nhầm | Tab Lô vàng → Sửa → % kỳ vọng |
+| Tham số, tên loại vàng | Tab Tham số, sửa trực tiếp |
+
+**Hoàn tác thao tác vừa làm**: sau mỗi thay đổi, đầu trang hiện nút **↶ Hoàn tác: <việc vừa làm>** (hoặc bấm Ctrl+Z khi không đang gõ trong ô). Nhớ tối đa 10 bước gần nhất, áp dụng cho mọi thay đổi kể cả xóa. Danh sách hoàn tác mất khi tải lại trang hoặc mở file dữ liệu khác.
 
 ---
 

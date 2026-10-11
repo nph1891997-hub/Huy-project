@@ -70,6 +70,7 @@ dialog details{margin:6px 0 4px}
     <span class="brand">🟡 Quản lý vàng</span>
     <nav id="tabs"></nav>
     <span class="spacer"></span>
+    <button id="btnUndo" class="hidden" data-act="undo" title="Ctrl+Z"></button>
     <span id="status"></span>
     <input type="file" id="importFile" accept=".json,application/json" class="hidden">
   </div>
@@ -159,7 +160,21 @@ function persist() {
   } else persistStatus();
 }
 function persistStatus() { setStatus(hasFSA ? 'Chưa kết nối file — đang lưu tạm trong trình duyệt' : 'Đang lưu trong trình duyệt', !!hasFSA); }
-function commit() { _cache = null; if (ui.plans) ui.plans = cashPlans(ui.cash); persist(); render(); }
+// Hoàn tác: nhớ trạng thái trước mỗi thay đổi (tối đa 10 bước, mất khi tải lại trang)
+const undoStack = [];
+let lastJSON = JSON.stringify(D);
+function commit(label = 'thay đổi', opts = {}) {
+  _cache = null;
+  if (opts.noUndo) undoStack.length = 0;
+  else { undoStack.push({ label, json: lastJSON }); if (undoStack.length > 10) undoStack.shift(); }
+  if (ui.plans) ui.plans = cashPlans(ui.cash);
+  persist(); lastJSON = JSON.stringify(D); render();
+}
+function undo() {
+  const u = undoStack.pop(); if (!u) return;
+  D = normalize(JSON.parse(u.json)); _cache = null; ui.plans = null;
+  persist(); lastJSON = JSON.stringify(D); render();
+}
 
 // IndexedDB để nhớ file đã chọn giữa các lần mở app
 function idb(mode, fn) {
@@ -189,7 +204,7 @@ async function useFile(handle, fromNew) {
   }
   fileHandle = handle; pendingHandle = null;
   try { await idbSet('file', handle); } catch { }
-  commit();
+  commit('', { noUndo: true });
 }
 
 // ===================== Tính toán vàng =====================
@@ -262,6 +277,8 @@ function render() {
   const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
   _cache = null;
   $('#app').innerHTML = fileBanner() + v();
+  const u = undoStack.at(-1), bu = $('#btnUndo');
+  bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label;
 }
 function fileBanner() {
   if (!hasFSA || fileHandle) return '';
@@ -361,7 +378,7 @@ function viewLo() {
       <td>${n > 0 ? `<button class="sm" data-act="sell" data-id="${esc(l.id)}">Bán…</button> ` : ''}
         <button class="sm" data-act="lot-detail" data-id="${esc(l.id)}">${ui.loOpen === l.id ? 'Ẩn' : 'Chi tiết'}</button>
         <button class="sm" data-act="lot-edit" data-id="${esc(l.id)}">Sửa</button>
-        <button class="sm danger" data-act="lot-del" data-id="${esc(l.id)}" ${sold ? 'disabled title="Lô đã có lần bán, không xóa được"' : ''}>Xóa</button></td></tr>`;
+        <button class="sm danger" data-act="lot-del" data-id="${esc(l.id)}">Xóa</button></td></tr>`;
     if (ui.loOpen === l.id) r += `<tr><td colspan="10" style="background:#fafbfc;white-space:normal">${lotDetail(l)}</td></tr>`;
     return r;
   }).join('');
@@ -477,7 +494,7 @@ function salesTable(sales, withLot = true) {
         <td>${b.so_mon} × ${fmtW(c.lot.trong_luong_mon_dem)}</td><td class="n">${fmtM(b.gia_ban)}/${UNIT_NAME[t?.don_vi_niem_yet] || ''}</td>
         <td class="n">${fmtM(c.thu)}</td><td class="n">${fmtM(c.von)}</td><td class="n ${cls(c.loi)}">${fmtMS(c.loi)}</td><td class="n ${clsP(c.g)}">${fmtP(c.g)}</td>
         <td class="n ${cls(c.vsBank)}">${fmtMS(c.vsBank)}</td><td class="n">${b.gia_mua_lai ? fmtM(b.gia_mua_lai) : ''}</td><td>${esc(b.ghi_chu)}</td>
-        <td><button class="sm" data-act="sale-edit" data-id="${esc(b.id)}">Sửa</button> <button class="sm danger" data-act="sale-undo" data-id="${esc(b.id)}">Hoàn tác</button></td></tr>`;
+        <td><button class="sm" data-act="sale-edit" data-id="${esc(b.id)}">Sửa</button> <button class="sm danger" data-act="sale-del" data-id="${esc(b.id)}">Xóa</button></td></tr>`;
     }).join('')}</table></div>`;
 }
 function viewLichSu() {
@@ -610,7 +627,7 @@ function dlgLot(lot, prefill) {
         D.vang.lo.push(Object.assign({ id: nextLotId(data.ngay_mua.slice(0, 4)) }, data));
       }
       if (fromSale) { const b = D.vang.ban.find(x => x.id === fromSale); if (b) b.gia_mua_lai = null; }
-      commit();
+      commit(isEdit ? 'sửa lô ' + lot.id : 'thêm lô ' + D.vang.lo.at(-1).id);
     },
     (f, e) => {
       const isNew = f.loai.value === '__new';
@@ -664,7 +681,7 @@ function dlgSale(lotId, sale) {
       else {
         D.vang.ban.push(Object.assign({ id: nextSaleId(), lo_id: lot.id }, data));
       }
-      commit();
+      commit(sale ? 'sửa lần bán ' + sale.id : `bán ${k} món lô ${lot.id}`);
     },
     f => {
       const k = Math.floor(parseN(f.k.value)), gia = parseM(f.gia.value);
@@ -699,7 +716,7 @@ function dlgHold(lotId) {
     f => {
       const kv = parseN(f.kv.value);
       if (kv <= s.g * 100) return alert('Mục tiêu mới phải cao hơn mức lời hiện tại (' + fmtP(s.g) + ').'), false;
-      lot.ky_vong_pct = kv; commit();
+      lot.ky_vong_pct = kv; commit('nâng mục tiêu lô ' + lot.id);
     },
     f => { const kv = parseN(f.kv.value) / 100; $('#holdInfo').textContent = `Cần giá tiệm mua vào ${fmtM(s.V * (1 + kv) / (s.n * s.w))}/${unit} (hiện ${fmtM(s.P)}/${unit}).`; });
 }
@@ -709,7 +726,13 @@ const act = {
   tab: d => { tab = d.k; render(); window.scrollTo(0, 0); },
   'lot-add': () => dlgLot(null),
   'lot-edit': d => dlgLot(lotById(d.id)),
-  'lot-del': d => { if (confirm('Xóa lô ' + d.id + '?')) { D.vang.lo = D.vang.lo.filter(l => l.id !== d.id); commit(); } },
+  'lot-del': d => {
+    const nb = D.vang.ban.filter(b => b.lo_id === d.id).length;
+    if (!confirm(`Xóa lô ${d.id}${nb ? ` cùng ${nb} lần bán của nó (lời đã chốt của các lần bán này cũng mất)` : ''}?`)) return;
+    D.vang.lo = D.vang.lo.filter(l => l.id !== d.id); D.vang.ban = D.vang.ban.filter(b => b.lo_id !== d.id);
+    if (ui.loOpen === d.id) ui.loOpen = null;
+    commit('xóa lô ' + d.id);
+  },
   'lot-detail': d => { ui.loOpen = ui.loOpen === d.id ? null : d.id; render(); },
   sell: d => dlgSale(d.id),
   hold: d => dlgHold(d.id),
@@ -719,10 +742,10 @@ const act = {
     dlgLot(null, { loai_id: lot.loai_id, trong_luong_mon_dem: lot.trong_luong_mon_dem, so_mon: b.so_mon, fromSale: b.id });
   },
   'prices-all': () => { ui.lsAllPrices = true; render(); },
-  'sale-undo': d => { if (confirm('Hoàn tác lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); ui.plans = null; commit(); } },
-  'rebuy-clear': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) { b.gia_mua_lai = null; commit(); } },
-  'price-del': d => { if (confirm('Xóa dòng giá này?')) { D.vang.gia.splice(+d.i, 1); commit(); } },
-  'type-del': d => { if (confirm('Xóa loại vàng này cùng lịch sử giá của nó?')) { D.vang.loai = D.vang.loai.filter(t => t.id !== d.id); D.vang.gia = D.vang.gia.filter(p => p.loai_id !== d.id); commit(); } },
+  'sale-del': d => { if (confirm('Xóa lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); commit('xóa lần bán ' + d.id); } },
+  'rebuy-clear': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) { b.gia_mua_lai = null; commit('bỏ nhắc mua lại ' + b.id); } },
+  'price-del': d => { const p = D.vang.gia[+d.i]; if (p && confirm('Xóa dòng giá ngày ' + fmtD(p.ngay) + '?')) { D.vang.gia.splice(+d.i, 1); commit('xóa giá ngày ' + fmtD(p.ngay)); } },
+  'type-del': d => { if (confirm('Xóa loại vàng này cùng lịch sử giá của nó?')) { D.vang.loai = D.vang.loai.filter(t => t.id !== d.id); D.vang.gia = D.vang.gia.filter(p => p.loai_id !== d.id); commit('xóa loại vàng'); } },
   'plan-confirm': d => {
     const p = ui.plans[+d.plan], rows = p.rows.filter(x => x.k > 0);
     const S = planSummary({ rows }, ui.cash);
@@ -730,8 +753,9 @@ const act = {
     for (const x of S.rows) {
       D.vang.ban.push({ id: nextSaleId(), lo_id: x.s.lot.id, ngay: today(), so_mon: x.r.k, gia_ban: x.s.P, gia_mua_lai: null, ghi_chu: 'Cần tiền ' + fmtM(ui.cash) });
     }
-    ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit();
+    ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit(`bán theo phương án ${p.name.slice(0, 1)} (${S.rows.length} lô)`);
   },
+  undo: () => undo(),
   'export-json': () => download(`sao-luu-vang-${today()}.json`, JSON.stringify(D, null, 2), 'application/json'),
   'import-json': () => $('#importFile').click(),
   'file-open': async () => { try { const [h] = await showOpenFilePicker({ types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, false); } catch (e) { if (e.name !== 'AbortError') alert(e.message); } },
@@ -750,6 +774,9 @@ document.addEventListener('input', e => {
     const br = f['br_' + el.name.slice(3)], mv = parseM(el.value);
     if (br && !br.dataset.touched && br.dataset.spread !== '' && mv) br.value = digits(mv + Number(br.dataset.spread));
   }
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, textarea, select') && !dlg.open) { e.preventDefault(); undo(); }
 });
 document.addEventListener('focusin', e => { if (e.target.matches('input.money, input[type=number]')) e.target.select(); });
 document.addEventListener('focusout', e => { if (e.target.matches('input.money')) { const v = parseM(e.target.value); e.target.value = v ? digits(v) : ''; } });
@@ -781,13 +808,13 @@ document.addEventListener('submit', e => {
       D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.ngay && p.loai_id === row.loai_id));
       D.vang.gia.push(row);
     }
-    commit();
+    commit('cập nhật giá ngày ' + fmtD(ngay));
   } else if (f.id === 'cashForm') {
     e.preventDefault();
     ui.cash = parseM(f.x.value); ui.plans = ui.cash > 0 ? cashPlans(ui.cash) : null; render();
   } else if (f.id === 'typeForm') {
     e.preventDefault();
-    D.vang.loai.push({ id: 't' + Date.now().toString(36), ten: f.ten.value.trim(), don_vi_niem_yet: f.dv.value }); commit();
+    D.vang.loai.push({ id: 't' + Date.now().toString(36), ten: f.ten.value.trim(), don_vi_niem_yet: f.dv.value }); commit('thêm loại vàng');
   }
 });
 document.addEventListener('change', e => {
@@ -795,9 +822,9 @@ document.addEventListener('change', e => {
   if (el.id === 'loStatus') { ui.loStatus = el.value; render(); }
   else if (el.id === 'loType') { ui.loType = el.value; render(); }
   else if (el.id === 'lsYear') { ui.lsYear = el.value; render(); }
-  else if (el.dataset.set) { D.tham_so[el.dataset.set] = parseN(el.value); commit(); }
-  else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit(); } }
-  else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit(); } }
+  else if (el.dataset.set) { D.tham_so[el.dataset.set] = parseN(el.value); commit('sửa tham số'); }
+  else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit('đổi tên loại vàng'); } }
+  else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit('đổi đơn vị loại vàng'); } }
   else if (el.dataset.plan != null && el.dataset.row != null) {
     ui.plans[+el.dataset.plan].rows[+el.dataset.row].k = Math.max(0, Math.floor(parseN(el.value))); render();
   } else if (el.id === 'importFile') {
@@ -806,7 +833,7 @@ document.addEventListener('change', e => {
       let F; try { F = JSON.parse(text); } catch { return alert('File không phải JSON hợp lệ.'); }
       if (!F || !F.vang) return alert('File không đúng định dạng dữ liệu của app.');
       if (!confirm('Dữ liệu trong file sẽ THAY THẾ toàn bộ dữ liệu đang mở. Tiếp tục?')) return;
-      D = normalize(F); ui.plans = null; commit();
+      D = normalize(F); ui.plans = null; commit('khôi phục từ bản sao lưu');
     });
   }
 });
