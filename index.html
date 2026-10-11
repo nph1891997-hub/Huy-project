@@ -146,13 +146,17 @@ let fileHandle = null, pendingHandle = null, saveChain = Promise.resolve(), save
 const hasFSA = 'showOpenFilePicker' in window;
 let booting = hasFSA;   // đang kiểm tra file đã nhớ: chưa hiện gì để không lộ số liệu cũ trong trình duyệt
 function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.className = err ? 'err' : ''; }
+// Mốc đồng bộ: cap_nhat của lần cuối đọc hoặc ghi file thành công (lưu trong trình duyệt, không nằm trong file)
+const SYNC_KEY = 'tai-san-dong-bo';
+const getMark = () => { try { return localStorage.getItem(SYNC_KEY) || ''; } catch { return ''; } };
+const setMark = v => { try { localStorage.setItem(SYNC_KEY, v); } catch { } };
 function persist() {
   D.cap_nhat = new Date().toISOString();
   try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { setStatus('Không lưu được vào trình duyệt: ' + e.message, true); }
   if (fileHandle) {
-    const text = JSON.stringify(D, null, 2), h = fileHandle;
+    const text = JSON.stringify(D, null, 2), h = fileHandle, ts = D.cap_nhat;
     saveChain = saveChain.then(async () => {
-      try { const w = await h.createWritable(); await w.write(text); await w.close(); setStatus('Đã lưu vào ' + h.name); }
+      try { const w = await h.createWritable(); await w.write(text); await w.close(); setMark(ts); setStatus('Đã lưu vào ' + h.name); }
       catch (e) {
         setStatus('Lỗi ghi file: ' + e.message, true);
         if (!saveErrShown) { saveErrShown = true; alert('Không ghi được vào file ' + h.name + ' (' + e.message + ').\nDữ liệu vẫn còn trong trình duyệt. Kiểm tra file rồi vào Tham số → Dữ liệu → Mở file khác… để kết nối lại.'); }
@@ -201,10 +205,21 @@ async function useFile(handle, fromNew) {
       try { F = normalize(JSON.parse(text)); } catch { alert('File này không phải dữ liệu JSON hợp lệ.'); return; }
     }
     if (F) {
-      const localNewer = (D.cap_nhat || '') > (F.cap_nhat || '') && D.vang.lo.length > 0;
-      const same = JSON.stringify(F) === JSON.stringify(D);
-      if (!same && localNewer && confirm('Dữ liệu trong trình duyệt MỚI HƠN dữ liệu trong file "' + handle.name + '".\n\nOK = giữ dữ liệu trình duyệt và ghi đè vào file.\nHủy = dùng dữ liệu trong file.')) { /* giữ D */ }
-      else D = F;
+      // Đối chiếu với mốc đồng bộ, không hỏi OK/Hủy:
+      // trình duyệt không có thay đổi mới → dùng file; có thay đổi mà file không đổi → ghi bản trình duyệt vào file;
+      // cả hai cùng đổi → dùng file, bản trình duyệt tự tải về để không mất
+      const mark = getMark(), body = x => JSON.stringify(Object.assign({}, x, { cap_nhat: '' }));
+      const hasData = x => x.vang.lo.length + x.vang.gia.length + x.vang.ban.length > 0;
+      const localDirty = hasData(D) && (D.cap_nhat || '') !== mark && body(D) !== body(F);
+      const fileChanged = (F.cap_nhat || '') !== mark;
+      if (!localDirty || fileChanged) {
+        if (localDirty) {
+          const now = new Date(), name = `ban-trinh-duyet-${today()}-${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}.json`;
+          download(name, JSON.stringify(D, null, 2), 'application/json');
+          ui.notice = `Bản trong trình duyệt khác với file <b>${esc(handle.name)}</b> (file đã được sửa ở nơi khác). App dùng dữ liệu trong file; bản trình duyệt đã tải về thành <b>${name}</b>. Cần lấy lại thì vào Tham số → Khôi phục từ bản sao lưu.`;
+        }
+        D = F;
+      }
     }
   }
   fileHandle = handle; pendingHandle = null;
@@ -281,7 +296,7 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+const ui = { notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
 function render() {
   // Đã nhớ file mà chưa mở được: không hiện số liệu, bản trong trình duyệt có thể cũ hơn file
   if (booting || (hasFSA && !fileHandle && pendingHandle)) {
@@ -292,7 +307,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-k="${k}">${n}</button>`).join('');
   const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
   _cache = null;
-  $('#app').innerHTML = fileBanner() + v();
+  $('#app').innerHTML = (ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '') + fileBanner() + v();
   const u = undoStack.at(-1), bu = $('#btnUndo');
   bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label;
 }
@@ -806,6 +821,7 @@ const act = {
     ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit(`bán theo phương án ${p.name.slice(0, 1)} (${S.rows.length} lô)`);
   },
   undo: () => undo(),
+  'notice-close': () => { ui.notice = ''; render(); },
   'export-json': () => download(`sao-luu-vang-${today()}.json`, JSON.stringify(D, null, 2), 'application/json'),
   'import-json': () => $('#importFile').click(),
   'file-open': async () => { try { const [h] = await showOpenFilePicker({ types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, false); } catch (e) { if (e.name !== 'AbortError') alert(e.message); } },
