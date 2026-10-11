@@ -907,6 +907,10 @@ function openDlg(html, onSubmit, onInput) {
   dlgSubmit = onSubmit;
   const f = $('#dlgForm');
   if (onInput) { f.addEventListener('input', e => onInput(f, e)); onInput(f, {}); }
+  // Enter ở bất kỳ ô nào = nút chính (nút Hủy đứng trước nên trình duyệt hay lấy nhầm nút Hủy); Esc = Hủy (sẵn có của hộp thoại)
+  f.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing && e.target.matches('input')) { e.preventDefault(); f.querySelector('.dlg-actions button.primary')?.click(); }
+  });
   dlg.showModal();
 }
 dlg.addEventListener('submit', e => {
