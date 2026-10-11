@@ -305,13 +305,14 @@ function viewHomNay() {
   const priceRows = D.vang.loai.map(t => {
     const p = latestPrice(t.id);
     const beMua = p && p.ban_ra ? p.ban_ra / p.mua_vao - 1 : null;
-    return `<tr><td>${esc(t.ten)}</td><td>${UNIT_NAME[t.don_vi_niem_yet]}</td>
-      <td><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="VD: 118,5"></td>
-      <td><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="VD: 120" data-spread="${p && p.ban_ra ? p.ban_ra - p.mua_vao : ''}"></td>
-      <td class="n">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td><td class="small ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td></tr>`;
+    return `<tr class="prow"><td class="c-ten">${esc(t.ten)}</td><td class="c-dv">${UNIT_NAME[t.don_vi_niem_yet]}</td>
+      <td class="c-mv"><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="VD: 118,5"></td>
+      <td class="c-br"><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="VD: 120" data-spread="${p && p.ban_ra ? p.ban_ra - p.mua_vao : ''}"></td>
+      <td class="n c-be">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td><td class="small c-note ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
+      <td class="c-kd">${p ? `<label class="small kd ${p.ngay < today() ? '' : 'hidden'}" data-pngay="${p.ngay}"><input type="checkbox" name="kd_${esc(t.id)}"> Không đổi</label>` : ''}</td></tr>`;
   }).join('');
   let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" max="${today()}" required></label></div>
-    <div class="scroll"><table><tr><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th></th></tr>${priceRows}</table></div>
+    <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${priceRows}</table></div>
     <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>`);
 
   const sts = openLots().map(l => lotState(l));
@@ -803,6 +804,8 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
   if (!f || f.id !== 'priceForm') return;
+  if (el.name === 'ngay')   // ô Không đổi chỉ hiện ở dòng có giá cũ hơn ngày đang chọn
+    for (const k of f.querySelectorAll('.kd')) { const on = k.dataset.pngay < el.value; k.classList.toggle('hidden', !on); if (!on) k.querySelector('input').checked = false; }
   if (el.name.startsWith('br_')) el.dataset.touched = '1';
   if (el.name.startsWith('mv_')) {
     const br = f['br_' + el.name.slice(3)], mv = parseM(el.value);
@@ -820,7 +823,7 @@ document.addEventListener('submit', e => {
     e.preventDefault();
     const ngay = f.ngay.value; if (!ngay) return alert('Chưa nhập ngày.');
     if (ngay > today()) return alert('Ngày nhập giá không được sau hôm nay.');
-    const all = [], changed = [];
+    const all = [], changed = [], ticked = [];
     for (const t of D.vang.loai) {
       const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value) || null;
       if (!mv) continue;
@@ -828,10 +831,11 @@ document.addEventListener('submit', e => {
       const lp = latestPrice(t.id), row = { ngay, loai_id: t.id, mua_vao: mv, ban_ra: br };
       all.push(row);
       if (!lp || lp.mua_vao !== mv || (lp.ban_ra || null) !== br) changed.push({ t, lp, row });
+      else if (f['kd_' + t.id]?.checked && lp.ngay < ngay) ticked.push(row);   // tick Không đổi: ghi nhận giá cũ cho ngày này
     }
     if (!all.length) return alert('Chưa nhập giá nào.');
-    let save = changed.map(x => x.row);
-    if (!changed.length) {
+    let save = changed.map(x => x.row).concat(ticked);
+    if (!save.length) {
       if (!confirm(`Giá không đổi so với lần nhập trước. Ghi nhận giá này cho ngày ${fmtD(ngay)}?`)) return;
       save = all;
     }
