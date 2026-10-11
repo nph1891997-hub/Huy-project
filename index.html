@@ -58,6 +58,7 @@ dialog h2{margin:0 0 12px;font-size:17px}
 .preview{background:#fafbfc;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px}
 .preview td{border:0;padding:2px 6px}
 .old{color:var(--yellow)}
+input.olddate{background:#fff4e5;border-color:#f3d19c}
 .hidden{display:none!important}
 summary{cursor:pointer;color:var(--muted)}
 details[open] summary{margin-bottom:10px}
@@ -506,7 +507,7 @@ function buyCell(t, ngay, mv, br, fresh) {
 // Giá dùng cho gợi ý mua của một loại: giá đang gõ trong bảng giá (f), hoặc giá đã lưu khi chưa có bảng.
 // fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ khác giá cũ, hoặc tick Không đổi)
 function priceVals(t, f) {
-  const ngay = (f && f.ngay.value) || ui.priceDate, lp = basePrice(t.id, ngay);
+  const ngay = f ? (validDate(f.ngay.value) ? f.ngay.value : today()) : ui.priceDate, lp = basePrice(t.id, ngay);
   if (!f) return { lp, ngay, mv: lp?.mua_vao, br: lp?.ban_ra, fresh: !!lp && lp.ngay === ngay };
   const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
   const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
@@ -656,14 +657,30 @@ function viewHomNay() {
   if (!D.vang.loai.length) return card('Bắt đầu', (hasFSA && !fileHandle && !pendingHandle ? `<p><b>Bước 1.</b> Tạo file lưu dữ liệu (nên đặt trong OneDrive/Google Drive):
       <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button></p>
     <p><b>Bước 2.</b> ` : '<p>') + `Thêm lô vàng đầu tiên, loại vàng tạo ngay trong form: <button class="primary" data-act="lot-add">+ Thêm lô</button></p>`);
-  const html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${ui.priceDate}" max="${today()}" required></label></div>
+  const html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${ui.priceDate}" max="${today()}" required class="${ui.priceDate !== today() ? 'olddate' : ''}"></label><span id="dateNote" style="padding-bottom:6px">${dateNote()}</span></div>
     <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${D.vang.loai.map(priceRow).join('')}</table></div>
     <div class="row" style="margin-top:10px"><button type="button" id="btnAllSame" data-act="all-same" class="${staleIds().length ? '' : 'hidden'}">Tất cả không đổi</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. ${VIEW ? 'Chế độ xem: rời dòng là tính lại theo giá vừa gõ, không lưu.' : 'Sửa xong, rời dòng hoặc nhấn Enter là lưu.'} Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>
     <details id="buyWhy"${ui.whyOpen ? ' open' : ''}><summary>Vì sao? · Biểu đồ 90 ngày</summary><div id="whyBody">${whyBody()}</div></details>`);
   return html + `<div id="homRest">${homRest()}</div>`;
 }
-// Giá điền sẵn của một loại cho ngày đang chọn
-const basePrice = (id, ngay) => latestPrice(id);
+// Giá điền sẵn của một loại cho ngày đang chọn: giá của chính ngày đó, chưa có thì giá gần nhất trước ngày đó
+function basePrice(id, ngay) {
+  const c = cache(), k = id + '|' + ngay; c.bp ||= new Map();
+  if (!c.bp.has(k)) { let best = null; for (const p of D.vang.gia) if (p.loai_id === id && p.ngay <= ngay && (!best || p.ngay > best.ngay)) best = p; c.bp.set(k, best); }
+  return c.bp.get(k);
+}
+const validDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v) && v >= '2000-01-01' && v <= today();
+// Dòng dưới ô Ngày: đang nhập cho ngày cũ thì nhắc rõ, kèm nút Về hôm nay
+const dateNote = () => ui.priceDate === today() ? '' : `<span class="old">Đang nhập giá cho ngày ${fmtD(ui.priceDate).slice(0, 5)} (không phải hôm nay)</span> <button type="button" class="sm" data-act="price-today">Về hôm nay</button>`;
+// Đổi ô Ngày: vẽ lại các dòng giá theo ngày mới (con trỏ đang ở ô Ngày nên không mất gì)
+function applyPriceDate(f) {
+  _cache = null;
+  for (const t of D.vang.loai) { const tr = f.querySelector(`tr.prow[data-id="${t.id}"]`); if (tr) tr.outerHTML = priceRow(t); }
+  f.ngay.classList.toggle('olddate', ui.priceDate !== today());
+  $('#dateNote').innerHTML = dateNote();
+  $('#btnAllSame')?.classList.toggle('hidden', !staleIds().length);
+  refreshBuy(f);
+}
 // Các loại chưa có giá của ngày đang chọn (để tick Không đổi / Tất cả không đổi)
 const staleIds = () => D.vang.loai.filter(t => { const b = basePrice(t.id, ui.priceDate); return b && b.ngay < ui.priceDate; }).map(t => t.id);
 function priceRow(t) {
@@ -673,7 +690,7 @@ function priceRow(t) {
       <td class="c-mv"><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="VD: 118,5"></td>
       <td class="c-br"><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="VD: 120" data-spread="${p && p.ban_ra ? p.ban_ra - p.mua_vao : ''}"></td>
       <td class="n c-be">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td>
-      <td class="c-buy" id="buy_${esc(t.id)}">${(v => buyCell(t, v.ngay, v.mv, v.br, v.fresh))(priceVals(t))}</td><td class="small c-note ${stale ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (stale && ui.priceDate === today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
+      <td class="c-buy" id="buy_${esc(t.id)}">${(v => buyCell(t, v.ngay, v.mv, v.br, v.fresh))(priceVals(t))}</td><td class="small c-note ${stale ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (stale ? (ui.priceDate === today() ? ' · chưa cập nhật hôm nay' : ` · chưa có giá ngày ${fmtD(ui.priceDate).slice(0, 5)}`) : '') : 'chưa có giá'}</td>
       <td class="c-kd">${p ? `<label class="small kd ${stale ? '' : 'hidden'}" data-pngay="${p.ngay}"><input type="checkbox" name="kd_${esc(t.id)}"> Không đổi</label>` : ''}</td></tr>`;
 }
 // Bảng giá: rời khỏi một dòng (hoặc Enter) là lưu dòng đó cho ngày đang chọn, cùng các kiểm tra chống gõ nhầm
@@ -685,12 +702,13 @@ function resetRow(f, id) {
 }
 function saveRow(id) {
   const f = $('#priceForm'); if (!f || !f['mv_' + id]) return;
-  const t = typeById(id), ngay = f.ngay.value, base = basePrice(id, ngay || ui.priceDate);
+  const t = typeById(id), ngay = f.ngay.value, base = basePrice(id, validDate(ngay) ? ngay : ui.priceDate);
   const mv = parseM(f['mv_' + id].value), br = parseM(f['br_' + id].value) || null;
   if (!mv) return resetRow(f, id);
   if (base && base.mua_vao === mv && (base.ban_ra || null) === br) return;   // không đổi gì
   if (!ngay) return alert('Chưa nhập ngày.');
   if (ngay > today()) return alert('Ngày nhập giá không được sau hôm nay.');
+  if (!validDate(ngay)) return alert('Ngày chưa hợp lệ.');
   if (br && br < mv) { alert(`${t.ten}: giá tiệm bán ra thấp hơn giá mua vào, kiểm tra lại.`); return resetRow(f, id); }
   if (!VIEW && base && Math.abs(mv / base.mua_vao - 1) > 0.15 &&
     !confirm(`${t.ten}: giá thay đổi nhiều so với lần trước: ${fmtM(base.mua_vao)} → ${fmtM(mv)} (${fmtP(mv / base.mua_vao - 1)}).\n\nGiá này có đúng không?`)) return resetRow(f, id);
@@ -700,7 +718,7 @@ function saveRow(id) {
 }
 // Tick Không đổi / Tất cả không đổi: ghi nhận giá điền sẵn cho ngày đang chọn
 function markSame(ids) {
-  const ngay = $('#priceForm')?.ngay.value || ui.priceDate, rows = [];
+  const v = $('#priceForm')?.ngay.value, ngay = validDate(v) ? v : ui.priceDate, rows = [];
   for (const id of ids) { const b = basePrice(id, ngay); if (b && b.ngay < ngay) rows.push({ ngay, loai_id: id, mua_vao: b.mua_vao, ban_ra: b.ban_ra }); }
   if (!rows.length) return;
   rows.forEach(setPrice); if (VIEW) ui.viewTemp = true;
@@ -1208,6 +1226,7 @@ const act = {
   },
   undo: () => undo(),
   'all-same': () => markSame(staleIds()),
+  'price-today': () => { ui.priceDate = today(); const f = $('#priceForm'); f.ngay.value = ui.priceDate; applyPriceDate(f); },
   'view-open': () => { ui.importMode = 'view'; $('#importFile').click(); },
   'view-old': () => download(`du-lieu-cu-trong-trinh-duyet-${today()}.json`, oldLocal, 'application/json'),
   'notice-close': () => { ui.notice = ''; render(); },
@@ -1239,10 +1258,8 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
   if (!f || f.id !== 'priceForm') return;
-  if (el.name === 'ngay') {   // ô Không đổi chỉ hiện ở dòng có giá cũ hơn ngày đang chọn
-    if (/^\d{4}-\d{2}-\d{2}$/.test(el.value) && el.value <= today()) ui.priceDate = el.value;
-    for (const k of f.querySelectorAll('.kd')) { const on = k.dataset.pngay < el.value; k.classList.toggle('hidden', !on); if (!on) k.querySelector('input').checked = false; }
-    $('#btnAllSame')?.classList.toggle('hidden', !staleIds().length);
+  if (el.name === 'ngay') {   // ngày hợp lệ: các dòng giá điền theo ngày đó; đang gõ dở (trống, chưa hợp lệ) thì để yên
+    if (validDate(el.value) && el.value !== ui.priceDate) { ui.priceDate = el.value; return applyPriceDate(f); }
   }
   if (el.name.startsWith('br_')) el.dataset.touched = '1';
   if (el.name.startsWith('mv_')) {
