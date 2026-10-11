@@ -31,7 +31,7 @@ Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hư�
 ```
 
 - Trong dữ liệu, **mọi trọng lượng lưu bằng dem** (số nguyên), nên cộng trừ không bị sai số lẻ.
-- **Khi nhập**: chọn đơn vị trong danh sách, hoặc nhập kiểu ghép `1 lượng 2 chỉ 5 phân`.
+- **Khi nhập**: trọng lượng mỗi món nhập vào 5 ô **lượng · chỉ · phân · ly · dem** (bỏ trống ô không dùng).
 - **Khi hiển thị**: luôn ghi dạng ghép, bỏ các thành phần bằng 0. Ví dụ `12.500 dem` → `1 lượng 2 chỉ 5 phân`.
 - **Tiền**: số nguyên đồng, hiển thị có dấu chấm ngăn cách (`118.000.000 đ`).
 
@@ -59,7 +59,7 @@ Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch s�
 | Nhóm | Điều kiện | Hiển thị thêm |
 |---|---|---|
 | 🟢 **Nên chốt** | `% lời ≥ % kỳ vọng` | Nút **Bán…** (mở hộp thoại bán, có sẵn nút Bán hết / Lấy lại vốn / Bán một nửa) và **Giữ, nâng mục tiêu** |
-| 🟡 **Sắp đạt** | `% kỳ vọng − % sắp đạt ≤ % lời < % kỳ vọng` | Còn cách mục tiêu bao nhiêu %, cần giá bao nhiêu |
+| 🟡 **Sắp đạt** | Chưa đạt, đang lời, và **giá chỉ còn cần tăng ≤ mức báo sắp đạt** | Giá cần tăng bao nhiêu % (lên bao nhiêu) |
 | ⚪ **Giữ** | `0 ≤ % lời` và chưa sắp đạt | — |
 | 🔴 **Đang lỗ** | `% lời < 0` | Lỗ bao nhiêu, giá cần tăng bao nhiêu % để hòa vốn |
 
@@ -87,10 +87,10 @@ Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi ti
   | Trọng lượng mỗi món | ✔ | Ví dụ `1 lượng` |
   | Giá mua | ✔ | Nhập **đơn giá** (theo đơn vị niêm yết của loại) **hoặc tổng tiền**, app tự tính ô còn lại. Lô mới: đơn giá tự điền giá tiệm bán ra mới nhất của loại |
   | % kỳ vọng | ✔ | Tự điền mặc định từ Tham số |
-  | % sắp đạt | ✔ | Tự điền mặc định từ Tham số |
+  | Báo sắp đạt khi giá còn cần tăng ≤ (%) | ✔ | Tự điền mặc định từ Tham số |
   | Ghi chú | | Nơi mua, số seri... |
 
-- **Số lô tự sinh**: `V-<năm mua>-<số thứ tự 3 chữ số>`, ví dụ `V-2026-001`. Số thứ tự đánh theo năm mua và không dùng lại khi xóa.
+- **Số lô tự sinh**: `V-<năm mua>-<số thứ tự 3 chữ số>`, ví dụ `V-2026-001`. Số thứ tự đánh theo năm mua, không dùng lại khi xóa, và luôn lớn hơn mọi mã đang có (kể cả khi khôi phục file thiếu bộ đếm).
 - Một lần mua có nhiều loại món (ví dụ 1 miếng 1 lượng và 1 miếng 5 chỉ) thì nhập thành **2 lô**.
 - Danh sách lô: lọc theo **Đang giữ / Đã đóng / Tất cả** và theo loại vàng.
 - **Sửa lô**: sửa được mọi ô. **Xóa lô**: chỉ được xóa khi lô chưa có lần bán nào.
@@ -150,7 +150,7 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 | Lãi suất ngân hàng tham chiếu (%/năm) | 5,5 |
 | Lạm phát (%/năm) | 3,5 |
 | % kỳ vọng mặc định cho lô mới | 15 |
-| % sắp đạt mặc định cho lô mới | 2 |
+| Báo sắp đạt khi giá còn cần tăng ≤ (%) | 2 |
 | Danh sách loại vàng | Tên, đơn vị niêm yết (lượng/chỉ/phân/ly/dem). Đổi tên được; chỉ xóa được loại chưa có lô nào |
 
 ---
@@ -177,12 +177,13 @@ Vốn còn lại     V  = n × T / n0
 Giá trị hôm nay G  = n × w × P
 Lời/lỗ             = G − V
 % lời           g  = G / V − 1
-% quy ra năm       = (1 + g)^(365 / d) − 1          (chỉ hiện khi d ≥ 30, tránh số ảo)
+% quy ra năm       = (1 + g)^(365 / d) − 1          (chỉ hiện khi d ≥ 90; dưới 3 tháng quy ra năm bị phóng đại)
 Nếu gửi ngân hàng  B = V × (1 + r × d / 365)         (lãi đơn, dùng lãi suất hiện tại)
 Hơn/thua ngân hàng = G − B
 Lãi thực           = (1 + g) / (1 + π)^(d / 365) − 1
 Cần tăng để hòa vốn = V / G − 1                      (chỉ khi đang lỗ)
 Giá cần để đạt mục tiêu = V × (1 + % kỳ vọng) / (n × w)
+Giá cần tăng để đạt  = Giá cần để đạt mục tiêu / P − 1   (dùng cho nhóm Sắp đạt / Giữ)
 ```
 
 ### 3.2 Một lần bán `k` món với giá `S`
@@ -202,7 +203,32 @@ Bán một nửa       k = làm tròn lên (n / 2)
 Bán lấy lại vốn   k = làm tròn lên (V / (w × P)), tối đa n
 ```
 
-### 3.4 Lưu ý về độ chính xác
+### 3.4 Quy tắc phân nhóm
+
+```
+Nên chốt : g ≥ % kỳ vọng
+Đang lỗ  : g < 0
+Sắp đạt  : còn lại, và Giá cần tăng để đạt ≤ mức báo sắp đạt
+Giữ      : còn lại
+```
+
+Mọi con số "cần tăng" trong app (sắp đạt, giữ, hòa vốn, mua hôm nay) đều là **% giá tiệm mua vào cần tăng**, nên so sánh trực tiếp với nhau được.
+
+### 3.5 Kiểm tra chống nhập sai
+
+| Chỗ nhập | Kiểm tra |
+|---|---|
+| Mọi ô ngày | Không được sau hôm nay; ngày bán không trước ngày mua; ngày mua không sau các lần bán |
+| Giá hôm nay | Lệch > 15% so với lần trước → hỏi lại; giá bán ra < giá mua vào → báo lỗi |
+| Đơn giá lô mới (mua từ ngày có giá trở đi) | Lệch > 15% so với giá tiệm bán ra → hỏi lại |
+| Giá bán | Lệch > 15% so với giá tiệm mua vào gần nhất → hỏi lại |
+| % kỳ vọng | Phải > 0; mức báo sắp đạt không âm |
+| Sửa lô đã có lần bán | Không đổi sang loại vàng có đơn vị niêm yết khác (giá các lần bán đã tính theo đơn vị cũ) |
+| Ghi file lỗi | Báo một lần bằng hộp thoại; dữ liệu vẫn còn trong trình duyệt |
+
+Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày của giá mới nhất, để nhập lô cũ không lấy nhầm giá hôm nay.
+
+### 3.6 Lưu ý về độ chính xác
 
 - So với ngân hàng dùng **lãi đơn** và **lãi suất hiện tại cho toàn bộ thời gian giữ**, nên chỉ mang tính tham khảo với lô giữ lâu. 
 - Tiền tính ra được làm tròn đến đồng khi hiển thị; bên trong giữ nguyên để cộng dồn không lệch.

@@ -130,7 +130,7 @@ function normalize(d) {
 let D = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch { return emptyData(); } })();
 
 // ----- Lưu: trình duyệt + file -----
-let fileHandle = null, pendingHandle = null, saveChain = Promise.resolve();
+let fileHandle = null, pendingHandle = null, saveChain = Promise.resolve(), saveErrShown = false;
 const hasFSA = 'showOpenFilePicker' in window;
 function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.className = err ? 'err' : ''; }
 function persist() {
@@ -140,12 +140,15 @@ function persist() {
     const text = JSON.stringify(D, null, 2), h = fileHandle;
     saveChain = saveChain.then(async () => {
       try { const w = await h.createWritable(); await w.write(text); await w.close(); setStatus('Đã lưu vào ' + h.name); }
-      catch (e) { setStatus('Lỗi ghi file: ' + e.message, true); }
+      catch (e) {
+        setStatus('Lỗi ghi file: ' + e.message, true);
+        if (!saveErrShown) { saveErrShown = true; alert('Không ghi được vào file ' + h.name + ' (' + e.message + ').\nDữ liệu vẫn còn trong trình duyệt. Kiểm tra file rồi vào Tham số → Dữ liệu → Mở file khác… để kết nối lại.'); }
+      }
     });
   } else persistStatus();
 }
 function persistStatus() { setStatus(hasFSA ? 'Chưa kết nối file — đang lưu tạm trong trình duyệt' : 'Đang lưu trong trình duyệt', !!hasFSA); }
-function commit() { _cache = null; persist(); render(); }
+function commit() { _cache = null; if (ui.plans) ui.plans = cashPlans(ui.cash); persist(); render(); }
 
 // IndexedDB để nhớ file đã chọn giữa các lần mở app
 function idb(mode, fn) {
@@ -209,12 +212,13 @@ function lotState(lot, asOf = today()) {
   if (!p) return s;
   s.P = p.mua_vao; s.valMon = w * s.P;
   s.G = n * s.valMon; s.L = s.G - V; s.g = V > 0 ? s.G / V - 1 : 0;
-  s.annual = d >= 30 ? Math.pow(1 + s.g, 365 / d) - 1 : null;
+  s.annual = d >= 90 ? Math.pow(1 + s.g, 365 / d) - 1 : null;
   s.B = V * (1 + r() * d / 365); s.vsBank = s.G - s.B;
   s.real = (1 + s.g) / Math.pow(1 + pi(), d / 365) - 1;
   s.targetPrice = n > 0 ? V * (1 + s.kv) / (n * w) : null;
-  s.breakEven = s.G > 0 ? V / s.G - 1 : null;
-  s.grp = s.g >= s.kv ? 'chot' : s.g < 0 ? 'lo' : s.g >= s.kv - s.sd ? 'sap' : 'giu';
+  s.needUp = s.targetPrice / s.P - 1;              // giá cần tăng bao nhiêu % nữa để đạt mục tiêu
+  s.breakEven = s.G > 0 ? V / s.G - 1 : null;       // giá cần tăng bao nhiêu % để hòa vốn
+  s.grp = s.g >= s.kv ? 'chot' : s.g < 0 ? 'lo' : s.needUp <= s.sd ? 'sap' : 'giu';
   return s;
 }
 function saleCalc(sale) {
@@ -223,6 +227,17 @@ function saleCalc(sale) {
   const thu = sale.so_mon * w * sale.gia_ban, von = sale.so_mon * costMon, loi = thu - von;
   const bank = von * (1 + r() * d / 365);
   return { lot, w, d, thu, von, loi, g: von > 0 ? loi / von : 0, bank, vsBank: thu - bank };
+}
+function nextLotId(y) {
+  const used = D.vang.lo.filter(l => l.id.startsWith(`V-${y}-`)).map(l => parseInt(l.id.slice(7), 10) || 0);
+  const seq = Math.max(D.vang.so_thu_tu.lo[y] || 0, ...used) + 1;
+  D.vang.so_thu_tu.lo[y] = seq;
+  return `V-${y}-${String(seq).padStart(3, '0')}`;
+}
+function nextSaleId() {
+  const used = D.vang.ban.map(b => parseInt(b.id.slice(2), 10) || 0);
+  D.vang.so_thu_tu.ban = Math.max(D.vang.so_thu_tu.ban || 0, ...used) + 1;
+  return 'B-' + String(D.vang.so_thu_tu.ban).padStart(4, '0');
 }
 const openLots = () => D.vang.lo.filter(l => l.so_mon - soldMon(l.id) > 0);
 const realizedTotal = () => D.vang.ban.reduce((a, b) => { const c = saleCalc(b); return a + (c ? c.loi : 0); }, 0);
@@ -262,7 +277,7 @@ function viewHomNay() {
       <td><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="0"></td>
       <td class="n">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td><td class="small ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td></tr>`;
   }).join('');
-  let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" required></label></div>
+  let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" max="${today()}" required></label></div>
     <div class="scroll"><table><tr><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th></th></tr>${priceRows}</table></div>
     <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>`);
 
@@ -279,8 +294,8 @@ function viewHomNay() {
   const groups = [
     ['chot', '🟢 Nên chốt — đã đạt mục tiêu', s => `<button class="sm primary" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>
        <button class="sm" data-act="hold" data-id="${esc(s.lot.id)}">Giữ, nâng mục tiêu</button>`],
-    ['sap', '🟡 Sắp đạt — theo dõi', s => `còn ${fmtP(s.kv - s.g, false)} · cần giá ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]} <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`],
-    ['giu', '⚪ Giữ — đang lời, chưa đạt', s => `còn ${fmtP(s.kv - s.g, false)} · cần giá ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]}`],
+    ['sap', '🟡 Sắp đạt — theo dõi', s => `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]}) <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`],
+    ['giu', '⚪ Giữ — đang lời, chưa đạt', s => `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]})`],
     ['lo', '🔴 Đang lỗ — không nên bán, trừ khi cần tiền', s => `cần giá tăng ${fmtP(s.breakEven, false)} để hòa vốn <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`]
   ];
   for (const [g, title, extra] of groups) {
@@ -332,7 +347,7 @@ function viewLo() {
       <td>${n > 0 ? n + ' món · ' + fmtW(n * l.trong_luong_mon_dem) : '—'}</td><td class="n">${fmtM(l.tong_tien_mua)}</td>
       <td class="n">${fmtM(l.tong_tien_mua / (l.so_mon * lotW(l)))}/${UNIT_NAME[t?.don_vi_niem_yet] || ''}</td>
       <td class="n">${fmtP(l.ky_vong_pct / 100, false)}</td><td>${n > 0 ? '<span class="tag">Đang giữ</span>' : '<span class="tag muted">Đã đóng</span>'}</td>
-      <td>${n > 0 ? `<button class="sm" data-act="sell" data-id="${esc(l.id)}">Bán</button> ` : ''}
+      <td>${n > 0 ? `<button class="sm" data-act="sell" data-id="${esc(l.id)}">Bán…</button> ` : ''}
         <button class="sm" data-act="lot-detail" data-id="${esc(l.id)}">${ui.loOpen === l.id ? 'Ẩn' : 'Chi tiết'}</button>
         <button class="sm" data-act="lot-edit" data-id="${esc(l.id)}">Sửa</button>
         <button class="sm danger" data-act="lot-del" data-id="${esc(l.id)}" ${sold ? 'disabled title="Lô đã có lần bán, không xóa được"' : ''}>Xóa</button></td></tr>`;
@@ -475,9 +490,9 @@ function viewLichSu() {
   html += card('Thống kê theo loại vàng', `<div class="scroll"><table><tr><th>Loại</th><th>Đang giữ</th><th class="n">Vốn</th><th class="n">Giá trị hôm nay</th><th class="n">Lời tạm tính</th><th class="n">Lời đã chốt</th></tr>${typeRows}</table></div>`);
   const allPrices = D.vang.gia.map((p, i) => ({ p, i })).sort((a, b) => b.p.ngay.localeCompare(a.p.ngay));
   const prices = ui.lsAllPrices ? allPrices : allPrices.slice(0, 30);
-  html += card('Lịch sử giá', prices.length ? `<div class="scroll"><table><tr><th>Ngày</th><th>Loại</th><th class="n">Tiệm mua vào</th><th class="n">Tiệm bán ra</th><th class="n">Chênh lệch</th><th></th></tr>
+  html += card('Lịch sử giá', prices.length ? `<div class="scroll"><table><tr><th>Ngày</th><th>Loại</th><th class="n">Tiệm mua vào</th><th class="n">Tiệm bán ra</th><th class="n">Mua cần tăng để hòa vốn</th><th></th></tr>
     ${prices.map(({ p, i }) => `<tr><td>${fmtD(p.ngay)}</td><td>${esc(typeById(p.loai_id)?.ten)}</td><td class="n">${fmtM(p.mua_vao)}</td><td class="n">${p.ban_ra ? fmtM(p.ban_ra) : '—'}</td>
-      <td class="n">${p.ban_ra ? fmtP(1 - p.mua_vao / p.ban_ra, false) : '—'}</td><td><button class="sm danger" data-act="price-del" data-i="${i}">Xóa</button></td></tr>`).join('')}</table></div>
+      <td class="n">${p.ban_ra ? '+' + fmtP(p.ban_ra / p.mua_vao - 1, false) : '—'}</td><td><button class="sm danger" data-act="price-del" data-i="${i}">Xóa</button></td></tr>`).join('')}</table></div>
     ${allPrices.length > prices.length ? `<button class="sm" data-act="prices-all">Xem tất cả ${allPrices.length} dòng</button>` : ''}` : '<p class="muted">Chưa nhập giá lần nào.</p>');
   return html;
 }
@@ -488,7 +503,7 @@ function viewThamSo() {
   const f = (k, label, step = '0.1') => `<label class="field"><span>${label}</span><input type="number" step="${step}" data-set="${k}" value="${T[k]}"></label>`;
   const used = id => D.vang.lo.some(l => l.loai_id === id) || D.vang.gia.some(p => p.loai_id === id);
   return card('Tham số chung', `<div class="row">${f('lai_suat_ngan_hang', 'Lãi suất ngân hàng tham chiếu (%/năm)')}${f('lam_phat', 'Lạm phát (%/năm)')}
-      ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', '% sắp đạt mặc định cho lô mới')}</div>
+      ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', 'Báo sắp đạt khi giá còn cần tăng ≤ (%)')}</div>
     <p class="muted small">So sánh với ngân hàng dùng lãi đơn và lãi suất hiện tại cho toàn bộ thời gian giữ, nên chỉ mang tính tham khảo với lô giữ lâu.</p>`) +
     card('Loại vàng', `<table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
       ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"></td>
@@ -534,7 +549,7 @@ function dlgLot(lot, prefill) {
   lot = lot || Object.assign({ ngay_mua: today(), loai_id: D.vang.loai[0]?.id || '__new', so_mon: 1, trong_luong_mon_dem: 1000, tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' }, prefill || {});
   let last = 'tong', autoPrice = !isEdit;
   openDlg(`<h2>${isEdit ? 'Sửa lô ' + esc(lot.id) : fromSale ? 'Mua lại (từ lần bán ' + esc(fromSale) + ')' : 'Thêm lô vàng'}</h2>
-    <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" required></label>
+    <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" max="${today()}" required></label>
       <label class="field"><span>Loại vàng</span><select name="loai">${typeOptions(lot.loai_id)}<option value="__new" ${lot.loai_id === '__new' ? 'selected' : ''}>➕ Loại mới…</option></select></label></div>
     <div class="row" id="newType"><label class="field"><span>Tên loại mới</span><input name="ten_moi" placeholder="VD: SJC miếng"></label>
       <label class="field"><span>Đơn vị niêm yết giá</span><select name="dv_moi">${unitOptions('luong')}</select></label></div>
@@ -544,7 +559,7 @@ function dlgLot(lot, prefill) {
     <div class="row"><label class="field"><span id="dgLabel">Đơn giá</span><input class="money" name="don_gia"></label>
       <label class="field"><span>Tổng tiền mua</span><input class="money" name="tong" value="${digits(lot.tong_tien_mua) || ''}"></label></div>
     <div class="row"><label class="field"><span>% kỳ vọng</span><input type="number" step="0.1" name="kv" value="${lot.ky_vong_pct}"></label>
-      <label class="field"><span>% sắp đạt</span><input type="number" step="0.1" name="sd" value="${lot.sap_dat_pct}"></label></div>
+      <label class="field"><span>Báo "sắp đạt" khi giá còn cần tăng ≤ (%)</span><input type="number" step="0.1" name="sd" value="${lot.sap_dat_pct}"></label></div>
     <label class="field"><span>Ghi chú</span><input name="ghi_chu" value="${esc(lot.ghi_chu)}" placeholder="Nơi mua, số seri…"></label>
     <div class="dlg-actions"><button value="cancel" type="submit" formnovalidate>Hủy</button><button class="primary" type="submit">Lưu</button></div>`,
     f => {
@@ -557,6 +572,19 @@ function dlgLot(lot, prefill) {
       if (loai === '__new' && !f.ten_moi.value.trim()) return alert('Chưa nhập tên loại vàng mới.'), false;
       if (isEdit && n < soldMon(lot.id)) return alert('Lô đã bán ' + soldMon(lot.id) + ' món, số món không được nhỏ hơn.'), false;
       if (isEdit && D.vang.ban.some(b => b.lo_id === lot.id && b.ngay < f.ngay.value)) return alert('Ngày mua không được sau ngày của các lần bán.'), false;
+      if (f.ngay.value > today()) return alert('Ngày mua không được sau hôm nay.'), false;
+      if (!(parseN(f.kv.value) > 0)) return alert('% kỳ vọng phải lớn hơn 0.'), false;
+      if (parseN(f.sd.value) < 0) return alert('Mức báo sắp đạt không được âm.'), false;
+      if (isEdit && soldMon(lot.id) > 0 && loai !== '__new' && typeById(loai)?.don_vi_niem_yet !== typeById(lot.loai_id)?.don_vi_niem_yet)
+        return alert('Lô đã có lần bán tính giá theo ' + UNIT_NAME[typeById(lot.loai_id)?.don_vi_niem_yet] + ', không đổi sang loại vàng có đơn vị niêm yết khác được.'), false;
+      if (isEdit && soldMon(lot.id) > 0 && loai === '__new' && f.dv_moi.value !== typeById(lot.loai_id)?.don_vi_niem_yet)
+        return alert('Lô đã có lần bán, loại mới phải cùng đơn vị niêm yết với loại cũ.'), false;
+      { // chống gõ nhầm đơn giá (nhầm giá lượng/chỉ, thừa/thiếu số 0) với lô mua gần đây
+        const unit = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet, p = loai === '__new' ? null : latestPrice(loai);
+        const dg = tong / (n * wd / UNIT_DEM[unit]);
+        if (p && p.ban_ra && f.ngay.value >= p.ngay && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
+          !confirm(`Đơn giá ${fmtM(dg)}/${UNIT_NAME[unit]} lệch ${fmtP(dg / p.ban_ra - 1)} so với giá tiệm bán ra ngày ${fmtD(p.ngay)} (${fmtM(p.ban_ra)}). Giá này có đúng không?`)) return false;
+      }
       if (loai === '__new') {
         loai = 't' + Date.now().toString(36);
         D.vang.loai.push({ id: loai, ten: f.ten_moi.value.trim(), don_vi_niem_yet: f.dv_moi.value });
@@ -564,9 +592,7 @@ function dlgLot(lot, prefill) {
       const data = { loai_id: loai, ngay_mua: f.ngay.value, so_mon: n, trong_luong_mon_dem: wd, tong_tien_mua: tong, ky_vong_pct: parseN(f.kv.value), sap_dat_pct: parseN(f.sd.value), ghi_chu: f.ghi_chu.value.trim() };
       if (isEdit) Object.assign(lotById(lot.id), data);
       else {
-        const y = data.ngay_mua.slice(0, 4), seq = (D.vang.so_thu_tu.lo[y] || 0) + 1;
-        D.vang.so_thu_tu.lo[y] = seq;
-        D.vang.lo.push(Object.assign({ id: `V-${y}-${String(seq).padStart(3, '0')}` }, data));
+        D.vang.lo.push(Object.assign({ id: nextLotId(data.ngay_mua.slice(0, 4)) }, data));
       }
       if (fromSale) { const b = D.vang.ban.find(x => x.id === fromSale); if (b) b.gia_mua_lai = null; }
       commit();
@@ -582,9 +608,9 @@ function dlgLot(lot, prefill) {
       if (tgt === 'don_gia') last = 'dg'; else if (tgt === 'tong') last = 'tong';
       // Lô mới: tự điền đơn giá = giá tiệm bán ra mới nhất của loại, cho tới khi bạn tự gõ giá
       if (tgt === 'don_gia' || tgt === 'tong') autoPrice = false;
-      if (autoPrice && !isNew) { const p = latestPrice(f.loai.value); f.don_gia.value = p && p.ban_ra ? digits(p.ban_ra) : ''; last = 'dg'; }
+      if (autoPrice && !isNew) { const p = latestPrice(f.loai.value); f.don_gia.value = p && p.ban_ra && f.ngay.value >= p.ngay ? digits(p.ban_ra) : ''; last = 'dg'; }
       if (!qty) return;
-      if (last === 'dg') f.tong.value = digits(parseM(f.don_gia.value) * qty);
+      if (last === 'dg') f.tong.value = parseM(f.don_gia.value) ? digits(parseM(f.don_gia.value) * qty) : '';
       else if (tgt !== 'don_gia') f.don_gia.value = parseM(f.tong.value) ? digits(parseM(f.tong.value) / qty) : '';
     });
 }
@@ -597,7 +623,7 @@ function dlgSale(lotId, sale) {
   const priceNote = !sale && s.p ? `<span class="small ${s.p.ngay < today() ? 'old' : 'muted'}">Giá tiệm mua vào ngày ${fmtD(s.p.ngay)}${s.p.ngay < today() ? ', nên kiểm tra giá thực tế' : ''}</span>` : '';
   openDlg(`<h2>${sale ? 'Sửa lần bán ' + esc(sale.id) : 'Bán lô ' + esc(lot.id)} · ${esc(t.ten)}</h2>
     <p class="muted">${sale ? 'Lô ' + esc(lot.id) + ' · ' : ''}Có thể bán ${maxN} món × ${fmtW(lot.trong_luong_mon_dem)} · mua ngày ${fmtD(lot.ngay_mua)}</p>
-    <div class="row"><label class="field"><span>Ngày bán</span><input type="date" name="ngay" value="${sale ? sale.ngay : today()}" required></label>
+    <div class="row"><label class="field"><span>Ngày bán</span><input type="date" name="ngay" value="${sale ? sale.ngay : today()}" min="${lot.ngay_mua}" max="${today()}" required></label>
       <label class="field"><span>Số món bán (tối đa ${maxN})</span><input type="number" min="1" max="${maxN}" name="k" value="${sale ? sale.so_mon : 1}" style="width:80px"></label>
       <label class="field"><span>Giá bán (mỗi ${unit})</span><input class="money" name="gia" value="${sale ? digits(sale.gia_ban) : s.hasPrice ? digits(s.P) : ''}"></label></div>
     ${priceNote ? `<div class="row">${priceNote}</div>` : ''}
@@ -610,13 +636,15 @@ function dlgSale(lotId, sale) {
       const k = Math.floor(parseN(f.k.value)), gia = parseM(f.gia.value);
       if (!f.ngay.value) return alert('Chưa nhập ngày bán.'), false;
       if (f.ngay.value < lot.ngay_mua) return alert('Ngày bán không được trước ngày mua.'), false;
+      if (f.ngay.value > today()) return alert('Ngày bán không được sau hôm nay.'), false;
       if (k < 1 || k > maxN) return alert('Số món bán phải từ 1 đến ' + maxN + '.'), false;
       if (gia <= 0) return alert('Chưa nhập giá bán.'), false;
+      if (!sale && s.P && Math.abs(gia / s.P - 1) > 0.15 &&
+        !confirm(`Giá bán ${fmtM(gia)}/${unit} lệch ${fmtP(gia / s.P - 1)} so với giá tiệm mua vào gần nhất (${fmtM(s.P)}). Giá này có đúng không?`)) return false;
       const data = { ngay: f.ngay.value, so_mon: k, gia_ban: gia, gia_mua_lai: parseM(f.mua_lai.value) || null, ghi_chu: f.ghi_chu.value.trim() };
       if (sale) Object.assign(sale, data);
       else {
-        D.vang.so_thu_tu.ban += 1;
-        D.vang.ban.push(Object.assign({ id: 'B-' + String(D.vang.so_thu_tu.ban).padStart(4, '0'), lo_id: lot.id }, data));
+        D.vang.ban.push(Object.assign({ id: nextSaleId(), lo_id: lot.id }, data));
       }
       commit();
     },
@@ -670,7 +698,7 @@ const act = {
   'sale-edit': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) dlgSale(b.lo_id, b); },
   rebuy: d => {
     const b = D.vang.ban.find(x => x.id === d.id), lot = b && lotById(b.lo_id); if (!lot) return;
-    dlgLot(null, { loai_id: lot.loai_id, trong_luong_mon_dem: lot.trong_luong_mon_dem, so_mon: b.so_mon, ky_vong_pct: lot.ky_vong_pct, sap_dat_pct: lot.sap_dat_pct, fromSale: b.id });
+    dlgLot(null, { loai_id: lot.loai_id, trong_luong_mon_dem: lot.trong_luong_mon_dem, so_mon: b.so_mon, fromSale: b.id });
   },
   'prices-all': () => { ui.lsAllPrices = true; render(); },
   'sale-undo': d => { if (confirm('Hoàn tác lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); ui.plans = null; commit(); } },
@@ -682,8 +710,7 @@ const act = {
     const S = planSummary({ rows }, ui.cash);
     if (!confirm(`Xác nhận bán theo ${p.name}?\n\n` + S.rows.map(x => `${x.s.lot.id}: ${x.r.k} món → ${fmtM(x.t)}`).join('\n') + `\n\nTổng thu: ${fmtM(S.thu)} · Lời/lỗ: ${fmtMS(S.loi)}`)) return;
     for (const x of S.rows) {
-      D.vang.so_thu_tu.ban += 1;
-      D.vang.ban.push({ id: 'B-' + String(D.vang.so_thu_tu.ban).padStart(4, '0'), lo_id: x.s.lot.id, ngay: today(), so_mon: x.r.k, gia_ban: x.s.P, gia_mua_lai: null, ghi_chu: 'Cần tiền ' + fmtM(ui.cash) });
+      D.vang.ban.push({ id: nextSaleId(), lo_id: x.s.lot.id, ngay: today(), so_mon: x.r.k, gia_ban: x.s.P, gia_mua_lai: null, ghi_chu: 'Cần tiền ' + fmtM(ui.cash) });
     }
     ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit();
   },
@@ -703,6 +730,7 @@ document.addEventListener('submit', e => {
   if (f.id === 'priceForm') {
     e.preventDefault();
     const ngay = f.ngay.value; if (!ngay) return alert('Chưa nhập ngày.');
+    if (ngay > today()) return alert('Ngày nhập giá không được sau hôm nay.');
     const all = [], changed = [];
     for (const t of D.vang.loai) {
       const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value) || null;
