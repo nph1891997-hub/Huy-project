@@ -34,6 +34,8 @@ Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hư�
 - **Khi nhập**: trọng lượng mỗi món nhập vào 5 ô **lượng · chỉ · phân · ly · dem** (bỏ trống ô không dùng).
 - **Khi hiển thị**: luôn ghi dạng ghép, bỏ các thành phần bằng 0. Ví dụ `12.500 dem` → `1 lượng 2 chỉ 5 phân`.
 - **Tiền**: số nguyên đồng, hiển thị có dấu chấm ngăn cách (`118.000.000 đ`).
+- **Gõ tắt tiền** (mọi ô tiền): số nhỏ hơn 1.000 hiểu là **triệu**: `118,5` hoặc `118.5` → 118.500.000; `50` → 50.000.000. Cũng nhận `118,5tr`, `500k`, `118.500.000`. Rời ô thì số được viết đầy đủ để bạn thấy app hiểu đúng chưa.
+- Bấm vào ô số thì nội dung được chọn sẵn, gõ là đè luôn, không phải xóa.
 
 ---
 
@@ -52,6 +54,7 @@ Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch s�
 - Ngày mặc định là hôm nay, sửa được (để nhập lại giá ngày cũ).
 - Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi. Loại nào giá chưa cập nhật hôm nay thì dòng "giá ngày …" hiện màu vàng.
 - Bấm **Cập nhật**: **chỉ lưu những loại có giá thay đổi**, loại không sửa vẫn giữ ngày cũ (để không tưởng nhầm giá cũ là giá hôm nay). Không loại nào thay đổi thì hỏi có ghi nhận "giá không đổi" cho ngày đó không.
+- **Giá tiệm bán ra tự theo**: sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch của lần nhập trước; sửa tay giá bán ra thì app không đụng vào nữa.
 - **Chống gõ nhầm**: giá mua vào lệch quá 15% so với lần trước (thừa/thiếu số 0, nhầm giá lượng với giá chỉ) thì hỏi lại trước khi lưu.
 
 **b) Gợi ý theo lô**: chia 4 nhóm, mỗi nhóm là một bảng.
@@ -91,6 +94,8 @@ Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi ti
   | Ghi chú | | Nơi mua, số seri... |
 
 - **Số lô tự sinh**: `V-<năm mua>-<số thứ tự 3 chữ số>`, ví dụ `V-2026-001`. Số thứ tự đánh theo năm mua, không dùng lại khi xóa, và luôn lớn hơn mọi mã đang có (kể cả khi khôi phục file thiếu bộ đếm).
+- **Mặc định để nhập ít nhất**: loại vàng = loại của lô nhập gần nhất; trọng lượng mỗi món = của lô gần nhất cùng loại (đổi loại thì đổi theo, trừ khi đã sửa tay); đơn giá = giá tiệm bán ra hôm nay. Mua đúng loại quen thì chỉ cần nhập **số món** rồi Lưu.
+- Ô ít dùng (mức báo sắp đạt, ghi chú) nằm trong **"Tùy chọn khác"**, thu gọn mặc định.
 - Một lần mua có nhiều loại món (ví dụ 1 miếng 1 lượng và 1 miếng 5 chỉ) thì nhập thành **2 lô**.
 - Danh sách lô: lọc theo **Đang giữ / Đã đóng / Tất cả** và theo loại vàng.
 - **Sửa lô**: sửa được mọi ô. **Xóa lô**: chỉ được xóa khi lô chưa có lần bán nào.
@@ -100,11 +105,9 @@ Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi ti
 
 Mở từ nút bán ở tab Hôm nay, tab Lô vàng hoặc tab Cần tiền.
 
-- Ngày bán (mặc định hôm nay).
+- Hiện sẵn chỉ 2 ô: **Số món bán** và **Giá bán**. Ngày bán (mặc định hôm nay), giá muốn mua lại, ghi chú nằm trong **"Tùy chọn khác"** (tự mở khi sửa lần bán).
 - **Số món bán** (tối đa bằng số món còn lại). Các nút gợi ý điền sẵn: Bán hết · Bán lấy lại vốn · Bán một nửa.
 - **Giá bán** (mặc định là giá tiệm mua vào hôm nay, sửa được theo giá thực tế).
-- Giá muốn mua lại (tùy chọn).
-- Ghi chú.
 - **Xem trước** trước khi xác nhận: tiền thu về, vốn của phần bán, lời/lỗ chốt, so với gửi ngân hàng, lô còn lại bao nhiêu.
 
 - Dưới ô giá ghi rõ giá đang điền sẵn là **giá ngày nào**; giá cũ thì nhắc kiểm tra giá thực tế.
