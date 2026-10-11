@@ -656,7 +656,7 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { gateError: '', gateBad: false, gateLost: false, gateRestore: null, priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+const ui = { gateError: '', gateBad: false, gateLost: false, gateRestore: null, priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsPType: '', lsPYear: '', cash: 0, plans: null };
 // "Hôm nay" mà bảng giá đang hiển thị: để tab mở qua đêm thì today() đã sang ngày mới mà bảng vẫn là ngày cũ
 let shownDay = today();
 // Sang ngày mới: ô Ngày đang là hôm nay cũ thì chuyển sang hôm nay (đang nhập bù một ngày khác thì giữ). Trả về ngày cũ nếu vừa sang ngày
@@ -1052,12 +1052,17 @@ function viewLichSu() {
       <td class="n ${cls(G - V)}">${G == null ? '—' : fmtMS(G - V)}</td><td class="n ${cls(rz)}">${fmtMS(rz)}</td></tr>`;
   }).join('');
   html += card('Thống kê theo loại vàng', `<div class="scroll"><table><tr><th>Loại</th><th>Đang giữ</th><th class="n">Vốn</th><th class="n">Giá vốn bình quân</th><th class="n">Giá trị hôm nay</th><th class="n">Lời tạm tính</th><th class="n">Lời đã chốt</th></tr>${typeRows}</table></div>`);
-  const allPrices = D.vang.gia.map((p, i) => ({ p, i })).sort((a, b) => b.p.ngay.localeCompare(a.p.ngay));
-  const prices = ui.lsAllPrices ? allPrices : allPrices.slice(0, 30);
-  html += card('Lịch sử giá', prices.length ? `<div class="scroll"><table><tr><th>Ngày</th><th>Loại</th><th class="n">Tiệm mua vào</th><th class="n">Tiệm bán ra</th><th class="n">Mua cần tăng để hòa vốn</th><th></th></tr>
+  // Lịch sử giá: lọc theo loại và năm (mặc định 30 dòng gần nhất). Dữ liệu nhiều năm có hàng chục nghìn dòng, vẽ hết thì chậm
+  const pYears = [...new Set(D.vang.gia.map(p => p.ngay.slice(0, 4)))].sort().reverse();
+  const allPrices = D.vang.gia.map((p, i) => ({ p, i })).filter(({ p }) => (!ui.lsPType || p.loai_id === ui.lsPType) && (!ui.lsPYear || p.ngay.startsWith(ui.lsPYear)))
+    .sort((a, b) => b.p.ngay.localeCompare(a.p.ngay) || a.p.loai_id.localeCompare(b.p.loai_id));
+  const prices = ui.lsPYear ? allPrices : allPrices.slice(0, 30);
+  const pFilter = `<div class="row"><select id="lsPType">${typeOptions(ui.lsPType, true)}</select>
+    <select id="lsPYear"><option value="">30 dòng gần nhất</option>${pYears.map(y => `<option ${ui.lsPYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    ${ui.lsPYear ? `<span class="small muted">${prices.length} dòng</span>` : ''}</div>`;
+  html += card('Lịch sử giá', !D.vang.gia.length ? '<p class="muted">Chưa nhập giá lần nào.</p>' : pFilter + (prices.length ? `<div class="scroll"><table><tr><th>Ngày</th><th>Loại</th><th class="n">Tiệm mua vào</th><th class="n">Tiệm bán ra</th><th class="n">Mua cần tăng để hòa vốn</th><th></th></tr>
     ${prices.map(({ p, i }) => `<tr><td>${fmtD(p.ngay)}</td><td>${esc(typeById(p.loai_id)?.ten)}</td><td class="n">${fmtM(p.mua_vao)}</td><td class="n">${p.ban_ra ? fmtM(p.ban_ra) : '—'}</td>
-      <td class="n">${p.ban_ra ? '+' + fmtP(p.ban_ra / p.mua_vao - 1, false) : '—'}</td><td><button class="sm danger" data-act="price-del" data-i="${i}">Xóa</button></td></tr>`).join('')}</table></div>
-    ${allPrices.length > prices.length ? `<button class="sm" data-act="prices-all">Xem tất cả ${allPrices.length} dòng</button>` : ''}` : '<p class="muted">Chưa nhập giá lần nào.</p>');
+      <td class="n">${p.ban_ra ? '+' + fmtP(p.ban_ra / p.mua_vao - 1, false) : '—'}</td><td><button class="sm danger" data-act="price-del" data-i="${i}">Xóa</button></td></tr>`).join('')}</table></div>` : '<p class="muted">Không có dòng giá nào.</p>'));
   return html;
 }
 
@@ -1341,7 +1346,6 @@ const act = {
     dlgLot(null, { loai_id: lot.loai_id, trong_luong_mon_dem: lot.trong_luong_mon_dem, so_mon: b.so_mon, fromSale: b.id });
   },
   buy: d => { const f = $('#priceForm'); dlgLot(null, { loai_id: d.id, don_gia: (f && parseM(f['br_' + d.id].value)) || latestPrice(d.id)?.ban_ra }); },
-  'prices-all': () => { ui.lsAllPrices = true; render(); },
   'sale-del': d => { if (confirm('Xóa lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); commit('xóa lần bán ' + d.id); } },
   // Bật lại các nhắc mua lại vừa tự tắt khi thêm lô (lô mới vẫn giữ)
   'rebuy-keep': () => {
@@ -1506,6 +1510,8 @@ document.addEventListener('change', e => {
   if (el.id === 'loStatus') { ui.loStatus = el.value; render(); }
   else if (el.id === 'loType') { ui.loType = el.value; render(); }
   else if (el.id === 'lsYear') { ui.lsYear = el.value; render(); }
+  else if (el.id === 'lsPType') { ui.lsPType = el.value; render(); }
+  else if (el.id === 'lsPYear') { ui.lsPYear = el.value; render(); }
   else if (el.dataset.set) {
     const v = parseN(el.value);
     if (el.dataset.set === 'vang_mua_giam_pct' && !(v > 0)) { alert('% giảm từ đỉnh phải lớn hơn 0.'); return render(); }
