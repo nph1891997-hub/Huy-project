@@ -1,6 +1,6 @@
 # Đặc tả: App quản lý vàng
 
-> Trạng thái: **bản đầu tiên đã làm (`index.html`); các mục 🆕 là sửa sau buổi dùng thử, chờ duyệt, chưa làm code** · Ngày: 2026-10-11
+> Trạng thái: **đã làm (`index.html`), gồm cả các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11)** · Ngày: 2026-10-11
 
 ## Sửa sau buổi dùng thử 🆕
 
@@ -165,7 +165,7 @@ Nhắc mua lại (mục c) vẫn giữ nguyên: đó là giá bạn tự đặt 
 
 - **Số lô tự sinh**: `V-<năm mua>-<số thứ tự 3 chữ số>`, ví dụ `V-2026-001`. Số thứ tự đánh theo năm mua, không dùng lại khi xóa, và luôn lớn hơn mọi mã đang có (kể cả khi khôi phục file thiếu bộ đếm).
 - **Mặc định để nhập ít nhất**: loại vàng = loại của lô nhập gần nhất; trọng lượng mỗi món = của lô gần nhất cùng loại, 🆕 loại chưa có lô nào (kể cả loại mới tạo ngay trong form) thì là **1 đơn vị niêm yết** của loại (lượng → `1 lượng`, chỉ → `1 chỉ`); đổi loại hoặc đổi đơn vị niêm yết của loại mới thì trọng lượng đổi theo, trừ khi đã sửa tay; đơn giá = giá tiệm bán ra hôm nay. Mua đúng loại quen thì chỉ cần nhập **số món** rồi Lưu.
-- 🆕 **Trọng lượng điền sẵn là một khối**: lần đầu gõ vào một ô trọng lượng thì các ô khác đang mang số điền sẵn tự xóa trắng. Ví dụ đang điền sẵn `1 chỉ`, gõ `1` vào ô lượng → `1 lượng`. Cần ghép nhiều đơn vị (trang sức `1 chỉ 2 phân`) thì gõ tiếp vào các ô kia như thường.
+- 🆕 **Trọng lượng điền sẵn là một khối**: lần đầu gõ vào một ô trọng lượng thì các ô khác đang mang số điền sẵn tự xóa trắng. Ví dụ đang điền sẵn `1 chỉ`, gõ `1` vào ô lượng → `1 lượng`. Cần ghép nhiều đơn vị (trang sức `1 chỉ 2 phân`) thì gõ tiếp vào các ô kia như thường. Áp dụng cho lô mới (Thêm lô, Mua lại…); form Sửa lô giữ cách cũ vì trọng lượng ở đó là số thật đã lưu.
 - 🆕 Ngay dưới 5 ô trọng lượng hiện **chữ đậm** `Mỗi món 1 lượng · cả lô 2 lượng`, thay cho dòng chữ xám nhỏ, để thấy ngay app hiểu đúng chưa.
 - 🆕 Lý do hai điều trên: khi dùng thử, form lô đầu tiên điền sẵn `1 chỉ` trong khi loại mới niêm yết theo lượng; gõ `1` vào ô lượng thành `1 lượng 1 chỉ`. Với 2 miếng SJC vốn 300 triệu, giá 156 triệu/lượng, app báo lời +14,4% và "sắp đạt, cần tăng 0,5%", trong khi thật chỉ +4%, cần tăng 10,6%. Kiểm tra lệch 15% không bắt được vì loại mới chưa có giá, còn thừa 1 chỉ trên 1 lượng chỉ lệch khoảng 9%.
 - Ô ít dùng (mức báo sắp đạt, 🆕 mức nhắc tụt, ghi chú) nằm trong **"Tùy chọn khác"**, thu gọn mặc định.
@@ -252,7 +252,8 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 
 Khi dùng thử trên điện thoại, bảng giá phải cuộn ngang mới thấy ô Tiệm bán ra, bảng lô phải cuộn ngang mới thấy lời/lỗ.
 
-- **Không cuộn ngang** trên màn hình từ 360px trở lên.
+- Áp dụng khi màn hình hẹp dưới 640px; rộng hơn thì giữ bảng như cũ.
+- **Tab Hôm nay không cuộn ngang** trên màn hình từ 360px trở lên. Các tab khác: trang không cuộn ngang, bảng dài cuộn trong khung của nó.
 - **Bảng giá**: mỗi loại một khối, ô Tiệm mua vào và Tiệm bán ra xếp chồng, dòng dưới là kết quả **Mua thêm?**; các cột còn lại thành một dòng chữ nhỏ.
 - **Bảng lô ở Hôm nay**: mỗi lô một thẻ. Dòng 1: mã lô, loại, **% lời**. Dòng 2: lời/lỗ và giá trị hôm nay. Dòng 3: các nút. Vốn, mục tiêu, so với ngân hàng xem trong Chi tiết.
 - **Biểu đồ** co theo bề ngang màn hình.
