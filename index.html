@@ -403,13 +403,22 @@ function lotState(lot, asOf = today()) {
   s.targetPrice = n > 0 ? V * (1 + s.kv) / (n * w) : null;
   s.needUp = s.targetPrice / s.P - 1;              // giá cần tăng bao nhiêu % nữa để đạt mục tiêu
   s.breakEven = s.G > 0 ? V / s.G - 1 : null;       // giá cần tăng bao nhiêu % để hòa vốn
-  s.tut = s.g < s.kv && s.nt != null && s.g >= 0 && s.g < s.nt;   // đã giữ, nâng mục tiêu mà lời tụt dưới mức nhắc
+  // Đã giữ, nâng mục tiêu mà lời tụt dưới mức nhắc, kể cả khi nay đã lỗ (mức nhắc luôn được đặt thấp hơn lời lúc đặt)
+  s.tut = s.g < s.kv && s.nt != null && s.g < s.nt;
   s.costUnit = lot.tong_tien_mua / (lot.so_mon * w);               // giá vốn mỗi đơn vị niêm yết
   // Lỗ chỉ do chênh lệch mua–bán: giá tiệm bán ra hôm nay chưa thấp hơn giá vốn, tức giá chưa giảm so với lúc mua
   s.spreadLoss = s.g < 0 && !!p.ban_ra && p.ban_ra >= s.costUnit - 0.5;
   s.grp = s.g >= s.kv || s.tut ? 'chot' : s.g < 0 && !s.spreadLoss ? 'lo' : s.g >= 0 && s.needUp <= s.sd ? 'sap' : 'giu';
   return s;
 }
+// Đỉnh lời kể từ ngày mua, theo giá đã nhập: lời tại một ngày = giá tiệm mua vào ngày đó / giá vốn mỗi đơn vị − 1
+function peakSince(lot, costUnit) {
+  let best = null;
+  for (const p of D.vang.gia) if (p.loai_id === lot.loai_id && p.ngay >= lot.ngay_mua && (!best || p.mua_vao > best.mua_vao)) best = p;
+  return best && { g: best.mua_vao / costUnit - 1, ngay: best.ngay };
+}
+const tutText = s => { const pk = peakSince(s.lot, s.costUnit);
+  return `lời tụt ${pk ? `từ ${fmtP(pk.g)} (${fmtD(pk.ngay).slice(0, 5)}) ` : ''}về ${fmtP(s.g)}${s.g < 0 ? ' (đã lỗ)' : ''}, dưới mức nhắc ${fmtP(s.nt, false)}`; };
 function saleCalc(sale) {
   const lot = lotById(sale.lo_id); if (!lot) return null;
   const w = lotW(lot), costMon = lot.tong_tien_mua / lot.so_mon, d = Math.max(0, days(lot.ngay_mua, sale.ngay));
@@ -676,7 +685,7 @@ function homRest() {
     <div class="stat"><span>Tổng lời</span><b class="${cls(sumG - sumV + rz)}">${fmtMS(sumG - sumV + rz)}</b></div></div>`);
 
   const groups = [
-    ['chot', '🟢 Nên chốt — đã đạt mục tiêu', s => (s.tut ? `<span class="old">lời tụt về ${fmtP(s.g)}, dưới mức nhắc ${fmtP(s.nt, false)}</span> ` : '') +
+    ['chot', '🟢 Nên chốt — đã đạt mục tiêu', s => (s.tut ? `<span class="old">${tutText(s)}</span> ` : '') +
       `<button class="sm primary" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>
        <button class="sm" data-act="hold" data-id="${esc(s.lot.id)}">${s.tut ? 'Giữ tiếp' : 'Giữ, nâng mục tiêu'}</button>`],
     ['sap', '🟡 Sắp đạt — theo dõi', s => `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]}) <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`],
@@ -965,7 +974,7 @@ function dlgLot(lot, prefill) {
     <div class="row"><label class="field"><span>% kỳ vọng</span><input type="number" step="0.1" name="kv" value="${lot.ky_vong_pct}"></label></div>
     <details${lot.ghi_chu || lot.sap_dat_pct !== T.vang_sap_dat_mac_dinh || typeof lot.nhac_tut_pct === 'number' ? ' open' : ''}><summary>Tùy chọn khác: mức báo sắp đạt, nhắc khi lời tụt, ghi chú</summary>
       <div class="row"><label class="field"><span>Báo "sắp đạt" khi giá còn cần tăng ≤ (%)</span><input type="number" step="0.1" name="sd" value="${lot.sap_dat_pct}"></label>
-      <label class="field"><span>Nhắc chốt nếu lời tụt về (%)</span><input type="number" step="0.1" name="nt" value="${lot.nhac_tut_pct ?? ''}" placeholder="trống = không nhắc"></label>
+      <label class="field"><span>Nhắc chốt nếu lời tụt về (%)</span><input type="number" step="0.1" name="nt" value="${lot.nhac_tut_pct ?? ''}" placeholder="trống = không nhắc"${latestPrice(lot.loai_id) ? '' : ' disabled title="Loại này chưa có giá, chưa đặt được mức nhắc"'}></label>
       <label class="field" style="flex:1"><span>Ghi chú</span><input name="ghi_chu" value="${esc(lot.ghi_chu)}" placeholder="Nơi mua, số seri…"></label></div></details>
     <div class="dlg-actions"><button value="cancel" type="submit" formnovalidate>Hủy</button><button class="primary" type="submit">Lưu</button></div>`,
     f => {
@@ -981,8 +990,15 @@ function dlgLot(lot, prefill) {
       if (f.ngay.value > today()) return alert('Ngày mua không được sau hôm nay.'), false;
       if (!(parseN(f.kv.value) > 0)) return alert('% kỳ vọng phải lớn hơn 0.'), false;
       if (parseN(f.sd.value) < 0) return alert('Mức báo sắp đạt không được âm.'), false;
-      const ntRaw = f.nt.value.trim();
-      if (ntRaw !== '' && parseN(ntRaw) < 0) return alert('Mức nhắc khi lời tụt không được âm.'), false;
+      const unitSel = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet;
+      const ntRaw = f.nt.disabled ? String(lot.nhac_tut_pct ?? '') : f.nt.value.trim();
+      if (ntRaw !== '' && (!isEdit || parseN(ntRaw) !== lot.nhac_tut_pct)) {   // chỉ xét khi đặt mức mới
+        const nt = parseN(ntRaw), p = loai === '__new' ? null : latestPrice(loai);
+        if (!(nt > 0)) return alert('Mức nhắc khi lời tụt phải lớn hơn 0, hoặc để trống.'), false;
+        if (!p) return alert('Loại vàng này chưa có giá, chưa đặt được mức nhắc.'), false;
+        const g = p.mua_vao / (tong / (n * wd / UNIT_DEM[unitSel])) - 1;
+        if (nt >= g * 100) return alert(`Mức nhắc phải thấp hơn lời hiện tại (${fmtP(g)}), hoặc để trống.`), false;
+      }
       if (isEdit && soldMon(lot.id) > 0 && loai !== '__new' && typeById(loai)?.don_vi_niem_yet !== typeById(lot.loai_id)?.don_vi_niem_yet)
         return alert('Lô đã có lần bán tính giá theo ' + UNIT_NAME[typeById(lot.loai_id)?.don_vi_niem_yet] + ', không đổi sang loại vàng có đơn vị niêm yết khác được.'), false;
       if (isEdit && soldMon(lot.id) > 0 && loai === '__new' && f.dv_moi.value !== typeById(lot.loai_id)?.don_vi_niem_yet)
@@ -1008,6 +1024,7 @@ function dlgLot(lot, prefill) {
     (f, e) => {
       const isNew = f.loai.value === '__new';
       $('#newType').classList.toggle('hidden', !isNew);
+      f.nt.disabled = isNew || !latestPrice(f.loai.value);
       if (e.target && /^w_/.test(e.target.name)) {
         if (wPrefill) for (const [k] of UNITS) if ('w_' + k !== e.target.name) f['w_' + k].value = '';
         wTouched = true; wPrefill = false;
@@ -1105,7 +1122,7 @@ function dlgHold(lotId) {
     f => {
       const kv = parseN(f.kv.value), ntRaw = f.nt.value.trim(), nt = ntRaw === '' ? null : parseN(ntRaw);
       if (!(kv > gp)) return alert('Mục tiêu mới phải cao hơn mức lời hiện tại (' + fmtP(s.g) + ').'), false;
-      if (nt != null && (nt < 0 || nt >= gp)) return alert('Mức nhắc phải từ 0 đến dưới mức lời hiện tại (' + fmtP(s.g) + '), hoặc để trống.'), false;
+      if (nt != null && (!(nt > 0) || nt >= gp)) return alert('Mức nhắc phải lớn hơn 0 và thấp hơn mức lời hiện tại (' + fmtP(s.g) + '), hoặc để trống.'), false;
       lot.ky_vong_pct = kv; lot.nhac_tut_pct = nt;
       commit((tiep ? 'giữ tiếp lô ' : 'nâng mục tiêu lô ') + lot.id);
     },
