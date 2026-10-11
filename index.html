@@ -1280,11 +1280,14 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('visibilitychange', checkOnReturn);
 window.addEventListener('focus', checkOnReturn);
-document.addEventListener('toggle', e => {   // phần thu gọn: mở ra mới vẽ (vẽ sẵn rồi thì thôi), đóng lại thì bỏ nội dung
+// Phần thu gọn: mở ra mới vẽ (vẽ sẵn rồi thì thôi), đóng lại thì bỏ nội dung.
+// Bấm vào tiêu đề thì vẽ ngay lúc bấm (sự kiện toggle đến sau, có thể kịp hiện một khung trống)
+const fillLazy = d => { const body = d.querySelector('.lazy-body'); if (!body.childElementCount) body.innerHTML = LAZY[d.dataset.lazy].html(); };
+document.addEventListener('click', e => { const d = e.target.closest?.('details[data-lazy] > summary')?.parentNode; if (d && !d.open) fillLazy(d); }, true);
+document.addEventListener('toggle', e => {
   const d = e.target, k = d.dataset?.lazy; if (!k) return;
   ui[LAZY[k].flag] = d.open;
-  const body = d.querySelector('.lazy-body');
-  if (!d.open) body.innerHTML = ''; else if (!body.childElementCount) body.innerHTML = LAZY[k].html();
+  if (d.open) fillLazy(d); else d.querySelector('.lazy-body').innerHTML = '';
 }, true);
 for (const ev of ['pointermove', 'pointerdown']) document.addEventListener(ev, e => { const svg = e.target.closest && e.target.closest('svg.chart'); if (svg) chartHover(svg, e); });
 document.addEventListener('pointerdown', () => { pointerIsDown = true; }, true);
