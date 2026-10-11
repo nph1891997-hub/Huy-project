@@ -73,6 +73,7 @@ dialog details{margin:6px 0 4px}
 .chart .l-mv{fill:none;stroke:#b9c0c8;stroke-width:1.2}
 .chart .l-entry{stroke:var(--green);stroke-dasharray:6 4}
 .chart .l-avg{stroke:var(--text);stroke-dasharray:2 3}
+.chart .l-rebuy{stroke:var(--blue);stroke-dasharray:3 3}
 .chart .m-buy{fill:var(--green)}.chart .m-sell{fill:var(--red)}
 .chart .guide{stroke:var(--muted)}
 body.view [data-act="lot-add"],body.view [data-act="lot-edit"],body.view [data-act="lot-del"],body.view [data-act="sell"],body.view [data-act="hold"],
@@ -462,7 +463,8 @@ function buyInfo(t, q, p, ngay) {
   const rows = D.vang.gia.filter(r => r.loai_id === t.id && r.ban_ra && r.ngay > from && r.ngay < ngay).map(r => ({ ngay: r.ngay, q: r.ban_ra, p: r.mua_vao }));
   const win = rows.concat({ ngay, q, p });
   const peak = win.reduce((a, r) => r.q > a.q ? r : a);
-  const lot = D.vang.lo.filter(l => l.loai_id === t.id && l.ngay_mua > from && l.ngay_mua <= ngay)
+  // Mốc rải: lần mua gần nhất trong cửa sổ, chỉ xét lô còn đang giữ (lô đã bán hết không chặn lần mua sau)
+  const lot = D.vang.lo.filter(l => l.loai_id === t.id && l.ngay_mua > from && l.ngay_mua <= ngay && l.so_mon - soldMon(l.id) > 0)
     .sort((a, b) => b.ngay_mua.localeCompare(a.ngay_mua) || b.id.localeCompare(a.id))[0];
   const lastUnit = lot ? lot.tong_tien_mua / (lot.so_mon * lotW(lot)) : null;
   const mDinh = peak.q * (1 - X), mRai = lastUnit ? lastUnit * (1 - X) : null;
@@ -471,9 +473,15 @@ function buyInfo(t, q, p, ngay) {
   const held = openLots().reduce((a, l) => a + lotState(l).V, 0), limit = D.tham_so.vang_han_muc_von || null;
   const mine = openLots().filter(l => l.loai_id === t.id).map(l => lotState(l));
   const avg = mine.length ? mine.reduce((a, s) => a + s.V, 0) / mine.reduce((a, s) => a + s.n * s.w, 0) : null;
-  const b = { t, q, p, ngay, X, win, peak, lot, lastUnit, mDinh, mRai, entry, gap: 1 - entry / q, drop: q / peak.q - 1,
-    spread, usual, held, limit, avg, days: new Set(win.map(r => r.ngay)).size };
-  b.kind = limit && held >= limit ? 'full' : usual != null && spread > 1.5 * usual ? 'wait' : q <= entry ? 'buy' : 'notyet';
+  // Mốc mua lại: giá muốn mua lại cao nhất bạn đặt khi bán loại này, còn đang chờ
+  const rb = D.vang.ban.filter(x => x.gia_mua_lai > 0 && lotById(x.lo_id)?.loai_id === t.id).reduce((a, x) => !a || x.gia_mua_lai > a.gia_mua_lai ? x : a, null);
+  const rebuyMark = rb ? rb.gia_mua_lai : null, near = rebuyMark != null ? Math.max(entry, rebuyMark) : entry;
+  const chot = mine.filter(s => s.hasPrice && s.grp === 'chot');   // lô cùng loại đang ở nhóm Nên chốt
+  const b = { t, q, p, ngay, X, win, peak, lot, lastUnit, mDinh, mRai, entry, gapEntry: 1 - entry / q, rb, rebuyMark, near, gap: 1 - near / q, chot,
+    drop: q / peak.q - 1, spread, usual, held, limit, avg, days: new Set(win.map(r => r.ngay)).size };
+  b.kind = limit && held >= limit ? 'full' : usual != null && spread > 1.5 * usual ? 'wait'
+    : chot.length && q <= near ? 'consider'          // vừa nên chốt vừa vùng mua: bán rồi mua lại là mất chênh lệch 2 lần
+    : rebuyMark != null && q <= rebuyMark ? 'rebuy' : q <= entry ? 'buy' : 'notyet';
   if (limit) { b.left = limit - held; const dem = b.left / q * UNIT_DEM[t.don_vi_niem_yet]; b.leftDem = dem >= 1000 ? Math.floor(dem / 1000) * 1000 : Math.floor(dem / 100) * 100; }
   return b;
 }
@@ -481,11 +489,14 @@ function buyCell(t, ngay, mv, br, fresh) {
   if (!br) return '<span class="muted">—</span>';
   if (!fresh) return `<span class="old">nhập giá ${ngay === today() ? 'hôm nay' : 'ngày ' + fmtD(ngay)}</span>`;
   const b = buyInfo(t, br, mv, ngay);
+  const few = b.days < 14 ? `<br><span class="small old">(mới có ${b.days} ngày giá)</span>` : '';
   if (b.kind === 'full') return `⛔ <b>Đủ hạn mức</b><br><span class="small muted">vốn đang giữ ${fmtTr(b.held)} / ${fmtTr(b.limit)}</span>`;
-  if (b.kind === 'wait') return `🟠 <b>Đợi, chênh lệch cao</b><br><span class="small muted">mua hôm nay cần tăng ${fmtP(b.spread, false)} mới hòa vốn, thường ${fmtP(b.usual, false)}</span>`;
+  if (b.kind === 'wait') return `🟠 <b>Đợi, chênh lệch cao</b><br><span class="small muted">mua hôm nay cần tăng ${fmtP(b.spread, false)} mới hòa vốn, thường ${fmtP(b.usual, false)}</span>` + few;
+  if (b.kind === 'consider') return `🟡 <b>Cân nhắc</b><br><span class="small muted">đang có lô ${b.chot.map(s => esc(s.lot.id)).join(', ')} nên chốt: chốt lô đó, hoặc giữ nó thay cho mua thêm</span>` + few;
+  if (b.kind === 'rebuy') return `🟢 <b>Mua lại</b> <button type="button" class="sm primary" data-act="rebuy" data-id="${esc(b.rb.id)}">Mua lại…</button><br><span class="small muted">chạm giá bạn đặt khi bán ${esc(b.rb.id)} (${fmtTr(b.rebuyMark)})</span>` + few;
   if (b.kind === 'buy') return `🟢 <b>Vùng mua</b> <button type="button" class="sm primary" data-act="buy" data-id="${esc(t.id)}">Mua…</button>` +
-    (b.limit ? `<br><span class="small muted">còn ${fmtTr(b.left)} trong hạn mức ≈ ${fmtW(b.leftDem)}</span>` : '');
-  return `⚪ Chưa tới<br><span class="small muted">mua khi bán ra ≤ ${fmtTr(b.entry)} (còn cách ${fmtP(b.gap, false)})</span>`;
+    (b.limit ? `<br><span class="small muted">còn ${fmtTr(b.left)} trong hạn mức ≈ ${fmtW(b.leftDem)}</span>` : '') + few;
+  return `⚪ Chưa tới<br><span class="small muted">mua khi bán ra ≤ ${fmtTr(b.near)} (còn cách ${fmtP(b.gap, false)})</span>` + few;
 }
 // Giá dùng cho gợi ý mua của một loại: giá đang gõ trong bảng giá (f), hoặc giá đã lưu khi chưa có bảng.
 // fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ khác giá cũ, hoặc tick Không đổi)
@@ -516,10 +527,12 @@ function whyBlock(t, ngay, mv, br, fresh) {
     `Tiệm bán ra ${ngay === today() ? 'hôm nay' : 'ngày ' + fmtD(ngay)}: <b>${fmtTr(b.q)}</b>/${u} · đỉnh 90 ngày ${fmtTr(b.peak.q)} (${fmtD(b.peak.ngay)}) · ${b.drop < 0 ? 'giảm <b>' + fmtP(-b.drop, false) + '</b> từ đỉnh' : 'đang ở đỉnh'}`,
     `Mốc đỉnh (giảm ${fmtP(b.X, false)} từ đỉnh): ${fmtTr(b.mDinh)}` + (b.lot
       ? ` · lần mua gần nhất ${fmtD(b.lot.ngay_mua)} giá ${fmtTr(b.lastUnit)} (${esc(b.lot.id)}) → mốc rải ${fmtTr(b.mRai)}` : ' · chưa mua loại này trong 90 ngày'),
-    `Giá vào vùng mua: <b>${fmtTr(b.entry)}</b>${b.q <= b.entry ? ' · đang trong vùng mua' : ' · còn cách ' + fmtP(b.gap, false)}`,
+    `Giá vào vùng mua: <b>${fmtTr(b.entry)}</b>${b.q <= b.entry ? ' · đang trong vùng mua' : ' · còn cách ' + fmtP(b.gapEntry, false)}`,
     `Chênh lệch mua–bán: ${b.spread != null ? fmtP(b.spread, false) : '—'} · thường ngày ${b.usual != null ? fmtP(b.usual, false) : 'chưa đủ 10 ngày giá để so'}`,
     `Giá vốn bình quân đang giữ: ${b.avg ? fmtTr(b.avg) + '/' + u : 'chưa giữ lô nào'}`
   ];
+  if (b.rb) li.push(`Giá muốn mua lại đang chờ: <b>${fmtTr(b.rebuyMark)}</b> (đặt khi bán ${esc(b.rb.id)} ngày ${fmtD(b.rb.ngay)})${b.q <= b.rebuyMark ? ' · đã chạm' : ''}`);
+  if (b.chot.length) li.push(`Đang có lô nên chốt cùng loại: ${b.chot.map(s => `${esc(s.lot.id)} (${fmtP(s.g)})`).join(', ')}; vừa chốt vừa mua thêm là mất chênh lệch mua–bán 2 lần`);
   if (b.limit) li.push(`Vốn đang giữ / hạn mức: ${fmtTr(b.held)} / ${fmtTr(b.limit)}`);
   return `<div class="why"><h3>${esc(t.ten)}${fresh ? '' : ` <span class="small old">· theo giá ngày ${fmtD(ngay)}, chưa có giá ngày đang chọn</span>`}</h3>
     ${b.days < 14 ? `<p class="small old">Mới có ${b.days} ngày giá, đỉnh 90 ngày chưa đủ tin cậy. Có thể nhập bù giá các ngày trước bằng ô Ngày.</p>` : ''}
@@ -536,7 +549,7 @@ function chartSvg(b) {
     .map(l => ({ ngay: l.ngay_mua, v: l.tong_tien_mua / (l.so_mon * lotW(l)), id: l.id }));
   const sells = D.vang.ban.map(x => ({ x, l: lotById(x.lo_id) })).filter(z => z.l && z.l.loai_id === b.t.id && z.x.ngay >= x0 && z.x.ngay <= b.ngay)
     .map(z => ({ ngay: z.x.ngay, v: z.x.gia_ban }));
-  const vals = pts.flatMap(r => [r.q, r.p]).concat(b.entry, b.avg || [], buys.map(z => z.v), sells.map(z => z.v)).filter(v => v > 0);
+  const vals = pts.flatMap(r => [r.q, r.p]).concat(b.entry, b.avg || [], b.rebuyMark || [], buys.map(z => z.v), sells.map(z => z.v)).filter(v => v > 0);
   const vmin = Math.min(...vals), vmax = Math.max(...vals), pad = (vmax - vmin) * 0.08 || vmax * 0.02, lo = vmin - pad, hi = vmax + pad;
   const Y = v => T + (H - T - B) * (hi - v) / (hi - lo);
   const line = k => pts.filter(r => r[k]).map(r => X(r.ngay).toFixed(1) + ',' + Y(r[k]).toFixed(1)).join(' ');
@@ -548,7 +561,7 @@ function chartSvg(b) {
     <text x="${L - 6}" y="${(Y(vmax) + 4).toFixed(1)}" text-anchor="end" class="ax">${fmtTr(vmax)}</text>
     <text x="${L - 6}" y="${(Y(vmin) + 4).toFixed(1)}" text-anchor="end" class="ax">${fmtTr(vmin)}</text>
     <text x="${L}" y="${H - 6}" class="ax">${fmtD(x0).slice(0, 5)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end" class="ax">${fmtD(b.ngay).slice(0, 5)}</text>
-    ${hline(b.entry, 'l-entry', 'vùng mua ' + fmtTr(b.entry))}${b.avg ? hline(b.avg, 'l-avg', 'giá vốn bq ' + fmtTr(b.avg), true) : ''}
+    ${hline(b.entry, 'l-entry', 'vùng mua ' + fmtTr(b.entry))}${b.avg ? hline(b.avg, 'l-avg', 'giá vốn bq ' + fmtTr(b.avg), true) : ''}${b.rebuyMark ? hline(b.rebuyMark, 'l-rebuy', 'mua lại ' + fmtTr(b.rebuyMark), true) : ''}
     <polyline points="${line('p')}" class="l-mv"/><polyline points="${line('q')}" class="l-br"/>
     ${buys.map(z => `<path d="M${X(z.ngay).toFixed(1)},${(Y(z.v) - 5).toFixed(1)}l5,9h-10z" class="m-buy"><title>Mua ${esc(z.id)} ${fmtD(z.ngay)}: ${fmtTr(z.v)}</title></path>`).join('')}
     ${sells.map(z => `<path d="M${X(z.ngay).toFixed(1)},${(Y(z.v) + 5).toFixed(1)}l5,-9h-10z" class="m-sell"><title>Bán ${fmtD(z.ngay)}: ${fmtTr(z.v)}</title></path>`).join('')}
