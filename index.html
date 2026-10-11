@@ -62,6 +62,19 @@ dialog h2{margin:0 0 12px;font-size:17px}
 summary{cursor:pointer;color:var(--muted)}
 details[open] summary{margin-bottom:10px}
 dialog details{margin:6px 0 4px}
+.why{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.why h3{margin:4px 0 6px}
+.why ul{margin:6px 0;padding-left:18px;white-space:normal}
+.legend{font-size:12px;color:var(--muted);margin:4px 0}
+.chart{width:100%;max-width:760px;height:auto;display:block;touch-action:pan-y}
+.chart .axis{stroke:#cdd3da}
+.chart .ax,.chart .lbl{font-size:11px;fill:var(--muted)}
+.chart .l-br{fill:none;stroke:var(--accent);stroke-width:2}
+.chart .l-mv{fill:none;stroke:#b9c0c8;stroke-width:1.2}
+.chart .l-entry{stroke:var(--green);stroke-dasharray:6 4}
+.chart .l-avg{stroke:var(--text);stroke-dasharray:2 3}
+.chart .m-buy{fill:var(--green)}.chart .m-sell{fill:var(--red)}
+.chart .guide{stroke:var(--muted)}
 </style>
 </head>
 <body>
@@ -327,14 +340,81 @@ function buyCell(t, ngay, mv, br, fresh) {
     (b.limit ? `<br><span class="small muted">còn ${fmtTr(b.left)} trong hạn mức ≈ ${fmtW(b.leftDem)}</span>` : '');
   return `⚪ Chưa tới<br><span class="small muted">mua khi bán ra ≤ ${fmtTr(b.entry)} (còn cách ${fmtP(b.gap, false)})</span>`;
 }
-// Tính lại cột Mua thêm? theo giá đang gõ trong bảng giá (chưa cần bấm Cập nhật)
+// Giá dùng cho gợi ý mua của một loại: giá đang gõ trong bảng giá (f), hoặc giá đã lưu khi chưa có bảng.
+// fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ khác giá cũ, hoặc tick Không đổi)
+function priceVals(t, f) {
+  const lp = latestPrice(t.id);
+  if (!f) return { lp, ngay: today(), mv: lp?.mua_vao, br: lp?.ban_ra, fresh: !!lp && lp.ngay === today() };
+  const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
+  const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
+  return { lp, ngay: f.ngay.value, mv, br, fresh: (!!lp && lp.ngay === f.ngay.value) || !!changed || !!f['kd_' + t.id]?.checked };
+}
+// Tính lại cột Mua thêm? và phần Vì sao? theo giá đang gõ (chưa cần bấm Cập nhật)
 function refreshBuy(f) {
-  for (const t of D.vang.loai) {
-    const el = document.getElementById('buy_' + t.id); if (!el) continue;
-    const lp = latestPrice(t.id), mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
-    const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
-    el.innerHTML = buyCell(t, f.ngay.value, mv, br, (lp && lp.ngay === f.ngay.value) || changed || f['kd_' + t.id]?.checked);
-  }
+  for (const t of D.vang.loai) { const el = document.getElementById('buy_' + t.id); if (el) { const v = priceVals(t, f); el.innerHTML = buyCell(t, v.ngay, v.mv, v.br, v.fresh); } }
+  const w = document.getElementById('whyBody'); if (w) w.innerHTML = whyBody(f);
+}
+function whyBody(f) {
+  return D.vang.loai.map(t => {
+    const v = priceVals(t, f);
+    if (v.fresh) return whyBlock(t, v.ngay, v.mv, v.br, true);
+    return v.lp ? whyBlock(t, v.lp.ngay, v.lp.mua_vao, v.lp.ban_ra, false) : whyBlock(t, v.ngay, 0, 0, false);
+  }).join('');
+}
+function whyBlock(t, ngay, mv, br, fresh) {
+  const u = UNIT_NAME[t.don_vi_niem_yet];
+  if (!br) return `<div class="why"><h3>${esc(t.ten)}</h3><p class="muted">Chưa có giá tiệm bán ra.</p></div>`;
+  const b = buyInfo(t, br, mv, ngay);
+  const li = [
+    `Tiệm bán ra ${ngay === today() ? 'hôm nay' : 'ngày ' + fmtD(ngay)}: <b>${fmtTr(b.q)}</b>/${u} · đỉnh 90 ngày ${fmtTr(b.peak.q)} (${fmtD(b.peak.ngay)}) · ${b.drop < 0 ? 'giảm <b>' + fmtP(-b.drop, false) + '</b> từ đỉnh' : 'đang ở đỉnh'}`,
+    `Mốc đỉnh (giảm ${fmtP(b.X, false)} từ đỉnh): ${fmtTr(b.mDinh)}` + (b.lot
+      ? ` · lần mua gần nhất ${fmtD(b.lot.ngay_mua)} giá ${fmtTr(b.lastUnit)} (${esc(b.lot.id)}) → mốc rải ${fmtTr(b.mRai)}` : ' · chưa mua loại này trong 90 ngày'),
+    `Giá vào vùng mua: <b>${fmtTr(b.entry)}</b>${b.q <= b.entry ? ' · đang trong vùng mua' : ' · còn cách ' + fmtP(b.gap, false)}`,
+    `Chênh lệch mua–bán: ${b.spread != null ? fmtP(b.spread, false) : '—'} · thường ngày ${b.usual != null ? fmtP(b.usual, false) : 'chưa đủ 10 ngày giá để so'}`,
+    `Giá vốn bình quân đang giữ: ${b.avg ? fmtTr(b.avg) + '/' + u : 'chưa giữ lô nào'}`
+  ];
+  if (b.limit) li.push(`Vốn đang giữ / hạn mức: ${fmtTr(b.held)} / ${fmtTr(b.limit)}`);
+  return `<div class="why"><h3>${esc(t.ten)}${fresh ? '' : ` <span class="small old">· theo giá ngày ${fmtD(ngay)}, chưa có giá ngày đang chọn</span>`}</h3>
+    ${b.days < 14 ? `<p class="small old">Mới có ${b.days} ngày giá, đỉnh 90 ngày chưa đủ tin cậy. Có thể nhập bù giá các ngày trước bằng ô Ngày.</p>` : ''}
+    <div class="legend"><span style="color:var(--accent)">━</span> tiệm bán ra · <span style="color:#b9c0c8">━</span> tiệm mua vào · <span style="color:var(--green)">╌</span> vùng mua · ┈ giá vốn bình quân · <span style="color:var(--green)">▲</span> lần mua · <span style="color:var(--red)">▼</span> lần bán</div>
+    ${chartSvg(b)}<ul>${li.map(x => `<li>${x}</li>`).join('')}</ul></div>`;
+}
+// Biểu đồ 90 ngày (SVG tự vẽ, không dùng thư viện để app vẫn một file, mở offline được)
+const CHARTS = {};
+function chartSvg(b) {
+  const W = 640, H = 200, L = 56, R = 10, T = 10, B = 22, x0 = addDays(b.ngay, -89), span = 89;
+  const X = d => L + (W - L - R) * Math.max(0, Math.min(span, days(x0, d))) / span;
+  const pts = b.win.slice().sort((a, c) => a.ngay.localeCompare(c.ngay));
+  const buys = D.vang.lo.filter(l => l.loai_id === b.t.id && l.ngay_mua >= x0 && l.ngay_mua <= b.ngay)
+    .map(l => ({ ngay: l.ngay_mua, v: l.tong_tien_mua / (l.so_mon * lotW(l)), id: l.id }));
+  const sells = D.vang.ban.map(x => ({ x, l: lotById(x.lo_id) })).filter(z => z.l && z.l.loai_id === b.t.id && z.x.ngay >= x0 && z.x.ngay <= b.ngay)
+    .map(z => ({ ngay: z.x.ngay, v: z.x.gia_ban }));
+  const vals = pts.flatMap(r => [r.q, r.p]).concat(b.entry, b.avg || [], buys.map(z => z.v), sells.map(z => z.v)).filter(v => v > 0);
+  const vmin = Math.min(...vals), vmax = Math.max(...vals), pad = (vmax - vmin) * 0.08 || vmax * 0.02, lo = vmin - pad, hi = vmax + pad;
+  const Y = v => T + (H - T - B) * (hi - v) / (hi - lo);
+  const line = k => pts.filter(r => r[k]).map(r => X(r.ngay).toFixed(1) + ',' + Y(r[k]).toFixed(1)).join(' ');
+  const hline = (v, cls, label, left) => `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="${cls}"/>` +
+    `<text x="${left ? L + 4 : W - R - 2}" y="${(Y(v) - 3).toFixed(1)}" text-anchor="${left ? 'start' : 'end'}" class="lbl">${label}</text>`;
+  CHARTS[b.t.id] = { W, X, pts };
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" data-chart="${esc(b.t.id)}" role="img" aria-label="Biểu đồ giá 90 ngày ${esc(b.t.ten)}">
+    <line x1="${L}" x2="${L}" y1="${T}" y2="${H - B}" class="axis"/><line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" class="axis"/>
+    <text x="${L - 6}" y="${(Y(vmax) + 4).toFixed(1)}" text-anchor="end" class="ax">${fmtTr(vmax)}</text>
+    <text x="${L - 6}" y="${(Y(vmin) + 4).toFixed(1)}" text-anchor="end" class="ax">${fmtTr(vmin)}</text>
+    <text x="${L}" y="${H - 6}" class="ax">${fmtD(x0).slice(0, 5)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end" class="ax">${fmtD(b.ngay).slice(0, 5)}</text>
+    ${hline(b.entry, 'l-entry', 'vùng mua ' + fmtTr(b.entry))}${b.avg ? hline(b.avg, 'l-avg', 'giá vốn bq ' + fmtTr(b.avg), true) : ''}
+    <polyline points="${line('p')}" class="l-mv"/><polyline points="${line('q')}" class="l-br"/>
+    ${buys.map(z => `<path d="M${X(z.ngay).toFixed(1)},${(Y(z.v) - 5).toFixed(1)}l5,9h-10z" class="m-buy"><title>Mua ${esc(z.id)} ${fmtD(z.ngay)}: ${fmtTr(z.v)}</title></path>`).join('')}
+    ${sells.map(z => `<path d="M${X(z.ngay).toFixed(1)},${(Y(z.v) + 5).toFixed(1)}l5,-9h-10z" class="m-sell"><title>Bán ${fmtD(z.ngay)}: ${fmtTr(z.v)}</title></path>`).join('')}
+    <line class="guide hidden" x1="0" x2="0" y1="${T}" y2="${H - B}"/>
+  </svg><div class="small muted" id="tip_${esc(b.t.id)}">Rê chuột hoặc chạm vào biểu đồ để xem giá từng ngày.</div>`;
+}
+function chartHover(svg, e) {
+  const c = CHARTS[svg.dataset.chart]; if (!c || !c.pts.length) return;
+  const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * c.W / r.width;
+  const p = c.pts.reduce((a, q) => Math.abs(c.X(q.ngay) - x) < Math.abs(c.X(a.ngay) - x) ? q : a);
+  const g = svg.querySelector('.guide'); g.classList.remove('hidden'); g.setAttribute('x1', c.X(p.ngay)); g.setAttribute('x2', c.X(p.ngay));
+  const tip = document.getElementById('tip_' + svg.dataset.chart);
+  if (tip) tip.textContent = `${fmtD(p.ngay)}: tiệm bán ra ${fmtM(p.q)} · mua vào ${p.p ? fmtM(p.p) : '—'}`;
 }
 const openLots = () => D.vang.lo.filter(l => l.so_mon - soldMon(l.id) > 0);
 const realizedTotal = () => D.vang.ban.reduce((a, b) => { const c = saleCalc(b); return a + (c ? c.loi : 0); }, 0);
@@ -342,7 +422,7 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+const ui = { whyOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
 function render() {
   // Đã nhớ file mà chưa mở được: không hiện số liệu, bản trong trình duyệt có thể cũ hơn file
   if (booting || (hasFSA && !fileHandle && pendingHandle)) {
@@ -385,12 +465,13 @@ function viewHomNay() {
       <td class="c-mv"><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="VD: 118,5"></td>
       <td class="c-br"><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="VD: 120" data-spread="${p && p.ban_ra ? p.ban_ra - p.mua_vao : ''}"></td>
       <td class="n c-be">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td>
-      <td class="c-buy" id="buy_${esc(t.id)}">${buyCell(t, today(), p?.mua_vao, p?.ban_ra, p && p.ngay === today())}</td><td class="small c-note ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
+      <td class="c-buy" id="buy_${esc(t.id)}">${(v => buyCell(t, v.ngay, v.mv, v.br, v.fresh))(priceVals(t))}</td><td class="small c-note ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
       <td class="c-kd">${p ? `<label class="small kd ${p.ngay < today() ? '' : 'hidden'}" data-pngay="${p.ngay}"><input type="checkbox" name="kd_${esc(t.id)}"> Không đổi</label>` : ''}</td></tr>`;
   }).join('');
   let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" max="${today()}" required></label></div>
     <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${priceRows}</table></div>
-    <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>`);
+    <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>
+    <details id="buyWhy"${ui.whyOpen ? ' open' : ''}><summary>Vì sao? · Biểu đồ 90 ngày</summary><div id="whyBody">${whyBody()}</div></details>`);
 
   const sts = openLots().map(l => lotState(l));
   const priced = sts.filter(s => s.hasPrice), noPrice = sts.filter(s => !s.hasPrice);
@@ -599,10 +680,11 @@ function viewLichSu() {
     const V = sts.reduce((a, s) => a + s.V, 0), G = sts.every(s => s.hasPrice) ? sts.reduce((a, s) => a + s.G, 0) : null;
     const dem = sts.reduce((a, s) => a + s.n * s.lot.trong_luong_mon_dem, 0);
     const rz = D.vang.ban.map(saleCalc).filter(c => c && c.lot.loai_id === t.id).reduce((a, c) => a + c.loi, 0);
-    return `<tr><td>${esc(t.ten)}</td><td>${fmtW(dem)}</td><td class="n">${fmtM(V)}</td><td class="n">${G == null ? '—' : fmtM(G)}</td>
+    const qty = sts.reduce((a, s) => a + s.n * s.w, 0);
+    return `<tr><td>${esc(t.ten)}</td><td>${fmtW(dem)}</td><td class="n">${fmtM(V)}</td><td class="n">${qty ? fmtM(V / qty) + '/' + UNIT_NAME[t.don_vi_niem_yet] : '—'}</td><td class="n">${G == null ? '—' : fmtM(G)}</td>
       <td class="n ${cls(G - V)}">${G == null ? '—' : fmtMS(G - V)}</td><td class="n ${cls(rz)}">${fmtMS(rz)}</td></tr>`;
   }).join('');
-  html += card('Thống kê theo loại vàng', `<div class="scroll"><table><tr><th>Loại</th><th>Đang giữ</th><th class="n">Vốn</th><th class="n">Giá trị hôm nay</th><th class="n">Lời tạm tính</th><th class="n">Lời đã chốt</th></tr>${typeRows}</table></div>`);
+  html += card('Thống kê theo loại vàng', `<div class="scroll"><table><tr><th>Loại</th><th>Đang giữ</th><th class="n">Vốn</th><th class="n">Giá vốn bình quân</th><th class="n">Giá trị hôm nay</th><th class="n">Lời tạm tính</th><th class="n">Lời đã chốt</th></tr>${typeRows}</table></div>`);
   const allPrices = D.vang.gia.map((p, i) => ({ p, i })).sort((a, b) => b.p.ngay.localeCompare(a.p.ngay));
   const prices = ui.lsAllPrices ? allPrices : allPrices.slice(0, 30);
   html += card('Lịch sử giá', prices.length ? `<div class="scroll"><table><tr><th>Ngày</th><th>Loại</th><th class="n">Tiệm mua vào</th><th class="n">Tiệm bán ra</th><th class="n">Mua cần tăng để hòa vốn</th><th></th></tr>
@@ -900,6 +982,8 @@ document.addEventListener('input', e => {
   }
   refreshBuy(f);
 });
+document.addEventListener('toggle', e => { if (e.target.id === 'buyWhy') ui.whyOpen = e.target.open; }, true);
+for (const ev of ['pointermove', 'pointerdown']) document.addEventListener(ev, e => { const svg = e.target.closest && e.target.closest('svg.chart'); if (svg) chartHover(svg, e); });
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, textarea, select') && !dlg.open) { e.preventDefault(); undo(); }
 });
