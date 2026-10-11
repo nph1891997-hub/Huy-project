@@ -144,6 +144,7 @@ let D = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); 
 // ----- Lưu: trình duyệt + file -----
 let fileHandle = null, pendingHandle = null, saveChain = Promise.resolve(), saveErrShown = false;
 const hasFSA = 'showOpenFilePicker' in window;
+let booting = hasFSA;   // đang kiểm tra file đã nhớ: chưa hiện gì để không lộ số liệu cũ trong trình duyệt
 function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.className = err ? 'err' : ''; }
 function persist() {
   D.cap_nhat = new Date().toISOString();
@@ -159,7 +160,11 @@ function persist() {
     });
   } else persistStatus();
 }
-function persistStatus() { setStatus(hasFSA ? 'Chưa kết nối file — đang lưu tạm trong trình duyệt' : 'Đang lưu trong trình duyệt', !!hasFSA); }
+function persistStatus() {
+  if (!hasFSA) setStatus('Đang lưu trong trình duyệt');
+  else if (pendingHandle) setStatus('Chưa mở file dữ liệu');
+  else setStatus('Chưa kết nối file — đang lưu tạm trong trình duyệt', true);
+}
 // Hoàn tác: nhớ trạng thái trước mỗi thay đổi (tối đa 10 bước, mất khi tải lại trang)
 const undoStack = [];
 let lastJSON = JSON.stringify(D);
@@ -278,6 +283,12 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 let tab = 'homnay';
 const ui = { loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
 function render() {
+  // Đã nhớ file mà chưa mở được: không hiện số liệu, bản trong trình duyệt có thể cũ hơn file
+  if (booting || (hasFSA && !fileHandle && pendingHandle)) {
+    $('#tabs').innerHTML = ''; $('#btnUndo').classList.add('hidden');
+    $('#app').innerHTML = booting ? '' : gateView();
+    return;
+  }
   $('#tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-k="${k}">${n}</button>`).join('');
   const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
   _cache = null;
@@ -285,10 +296,14 @@ function render() {
   const u = undoStack.at(-1), bu = $('#btnUndo');
   bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label;
 }
+function gateView() {
+  const n = esc(pendingHandle.name);
+  return card('📂 Mở dữ liệu', `<p>Dữ liệu nằm trong file <b>${n}</b>. Mở lại file để xem số liệu mới nhất; bản lưu trong trình duyệt có thể cũ hơn (ví dụ khi vừa sửa trên máy khác).</p>
+    <div class="row"><button class="primary" data-act="file-reconnect" style="font-size:16px;padding:9px 18px">Mở lại ${n}</button>
+      <button data-act="file-open">Mở file khác…</button><button data-act="file-new">Tạo file mới…</button></div>`);
+}
 function fileBanner() {
   if (!hasFSA || fileHandle) return '';
-  if (pendingHandle) return `<div class="note">📂 Chưa mở file dữ liệu <b>${esc(pendingHandle.name)}</b>, thay đổi lúc này chỉ lưu tạm trong trình duyệt.
-    <button class="primary" data-act="file-reconnect">Mở lại ${esc(pendingHandle.name)}</button></div>`;
   if (!D.vang.loai.length && !D.vang.lo.length) return '';
   return `<div class="note">Dữ liệu đang lưu tạm trong trình duyệt. Lưu vào file để không mất:
     <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button></div>`;
@@ -796,8 +811,13 @@ const act = {
   'file-open': async () => { try { const [h] = await showOpenFilePicker({ types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, false); } catch (e) { if (e.name !== 'AbortError') alert(e.message); } },
   'file-new': async () => { try { const h = await showSaveFilePicker({ suggestedName: 'tai-san.json', types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, true); } catch (e) { if (e.name !== 'AbortError') alert(e.message); } },
   'file-reconnect': async () => {
-    try { const h = pendingHandle || await idbGet('file'); if (h && await h.requestPermission({ mode: 'readwrite' }) === 'granted') await useFile(h, false); }
-    catch (e) { alert('Không mở lại được file: ' + e.message); }
+    const h = pendingHandle || await idbGet('file').catch(() => null); if (!h) return;
+    try {
+      if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return alert('Chưa được cho phép mở file ' + h.name + '.');
+      await useFile(h, false);
+    } catch (e) {
+      alert(e.name === 'NotFoundError' ? `Không tìm thấy file ${h.name} (có thể đã bị xóa hoặc chuyển chỗ). Dùng Mở file khác… hoặc Tạo file mới….` : 'Không mở lại được file: ' + e.message);
+    }
   }
 };
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) act[b.dataset.act](b.dataset, b); });
@@ -883,16 +903,16 @@ function download(name, text, type) {
 }
 // ===================== Khởi động =====================
 (async () => {
-  render(); persistStatus();
+  render();
   if (hasFSA) {
-    try {
-      const h = await idbGet('file');
-      if (h) {
-        if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') await useFile(h, false);
-        else { pendingHandle = h; render(); }
-      }
-    } catch { }
+    let h = null;
+    try { h = await idbGet('file'); } catch { }
+    if (h) {
+      pendingHandle = h;
+      try { if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') { booting = false; await useFile(h, false); return; } } catch { }
+    }
   }
+  booting = false; render(); persistStatus();
 })();
 </script>
 </body>
