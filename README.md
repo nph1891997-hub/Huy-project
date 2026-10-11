@@ -9,6 +9,10 @@ App một file HTML để quản lý vàng theo lô: nhập giá mỗi ngày, xe
 3. Những lần sau: bấm **Mở lại tai-san.json**. Trước khi mở file, app không hiện số liệu để khỏi xem nhầm bản cũ. Nếu Chrome/Edge hỏi quyền và có lựa chọn "Cho phép mỗi lần truy cập", chọn nó để khỏi phải bấm lại.
 4. Dùng chung file trên 2 máy (qua OneDrive/Drive): app tự đối chiếu khi mở file. Nếu cả máy này lẫn file đều có thay đổi, app dùng dữ liệu trong file và tự tải bản của trình duyệt về để không mất.
 
+Nhập giá hằng ngày ở bảng **Giá vàng** (tab Hôm nay): sửa giá xong, **rời dòng hoặc nhấn Enter là lưu**, không cần bấm nút. Loại nào giá không đổi thì tick **Không đổi**, hoặc bấm **Tất cả không đổi**. Muốn nhập bù ngày cũ thì đổi ô Ngày; ô Ngày giữ ngày đó cho tới khi bấm **Về hôm nay**.
+
+Mở app ở 2 tab hoặc 2 máy cùng lúc: trước mỗi lần lưu và khi quay lại tab, app kiểm tra file có bị sửa ở nơi khác không. Có thì app nạp bản mới và báo cho bạn; thay đổi vừa làm ở tab này mà chưa kịp lưu thì được tải về thành file để không mất.
+
 Gợi ý mua thêm nằm ở cột **Mua thêm?** trong bảng giá; quy tắc (giảm bao nhiêu % từ đỉnh 90 ngày thì mua, hạn mức vốn) chỉnh ở tab **Tham số → Mua thêm**.
 
 Trên điện thoại (hoặc Safari, Firefox), trình duyệt không ghi thẳng vào file được nên app ở **chế độ xem**: mở `tai-san.json` để xem lô nào nên chốt, có nên mua thêm không, gõ thử giá của tiệm; không lưu gì.
