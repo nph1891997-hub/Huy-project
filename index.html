@@ -246,7 +246,10 @@ function lotState(lot, asOf = today()) {
   s.needUp = s.targetPrice / s.P - 1;              // giá cần tăng bao nhiêu % nữa để đạt mục tiêu
   s.breakEven = s.G > 0 ? V / s.G - 1 : null;       // giá cần tăng bao nhiêu % để hòa vốn
   s.tut = s.g < s.kv && s.nt != null && s.g >= 0 && s.g < s.nt;   // đã giữ, nâng mục tiêu mà lời tụt dưới mức nhắc
-  s.grp = s.g >= s.kv || s.tut ? 'chot' : s.g < 0 ? 'lo' : s.needUp <= s.sd ? 'sap' : 'giu';
+  s.costUnit = lot.tong_tien_mua / (lot.so_mon * w);               // giá vốn mỗi đơn vị niêm yết
+  // Lỗ chỉ do chênh lệch mua–bán: giá tiệm bán ra hôm nay chưa thấp hơn giá vốn, tức giá chưa giảm so với lúc mua
+  s.spreadLoss = s.g < 0 && !!p.ban_ra && p.ban_ra >= s.costUnit - 0.5;
+  s.grp = s.g >= s.kv || s.tut ? 'chot' : s.g < 0 && !s.spreadLoss ? 'lo' : s.g >= 0 && s.needUp <= s.sd ? 'sap' : 'giu';
   return s;
 }
 function saleCalc(sale) {
@@ -326,7 +329,9 @@ function viewHomNay() {
       `<button class="sm primary" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>
        <button class="sm" data-act="hold" data-id="${esc(s.lot.id)}">${s.tut ? 'Giữ tiếp' : 'Giữ, nâng mục tiêu'}</button>`],
     ['sap', '🟡 Sắp đạt — theo dõi', s => `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]}) <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`],
-    ['giu', '⚪ Giữ — đang lời, chưa đạt', s => `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]})`],
+    ['giu', '⚪ Giữ — chưa đạt mục tiêu', s => s.spreadLoss
+      ? `<span class="muted">chưa qua chênh lệch mua–bán</span>, cần tăng ${fmtP(s.breakEven, false)} để hòa vốn`
+      : `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]})`],
     ['lo', '🔴 Đang lỗ — không nên bán, trừ khi cần tiền', s => `cần giá tăng ${fmtP(s.breakEven, false)} để hòa vốn <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`]
   ];
   for (let [g, title, extra] of groups) {
