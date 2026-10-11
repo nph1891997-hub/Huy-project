@@ -212,22 +212,75 @@ let fileHandle = null, pendingHandle = null, saveChain = Promise.resolve(), save
 let booting = hasFSA;   // đang kiểm tra file đã nhớ: chưa hiện gì để không lộ số liệu cũ trong trình duyệt
 function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.className = err ? 'err' : ''; }
 // Mốc đồng bộ: cap_nhat của lần cuối đọc hoặc ghi file thành công (lưu trong trình duyệt, không nằm trong file)
-const SYNC_KEY = 'tai-san-dong-bo';
+const SYNC_KEY = 'tai-san-dong-bo', CAP_KEY = KEY + '-cap';
 const getMark = () => { try { return localStorage.getItem(SYNC_KEY) || ''; } catch { return ''; } };
 const setMark = v => { try { localStorage.setItem(SYNC_KEY, v); } catch { } };
+// Dấu lần đọc/ghi cuối của riêng tab này (không dùng chung giữa các tab như mốc đồng bộ):
+// thời điểm sửa file và cap_nhat. Dùng để biết nơi lưu có bị tab/máy khác sửa không.
+let seen = { mod: null, cap: (() => { try { return localStorage.getItem(CAP_KEY) ?? ''; } catch { return ''; } })() };
+let gen = 0;   // tăng mỗi khi nạp dữ liệu từ nơi khác: các lần lưu xếp hàng từ trước đó bỏ đi
+const backupName = () => { const n = new Date(); return `ban-trinh-duyet-${today()}-${String(n.getHours()).padStart(2, '0')}h${String(n.getMinutes()).padStart(2, '0')}.json`; };
+// Nơi lưu (file, hoặc bản trong trình duyệt khi chưa kết nối file) có bị sửa ở nơi khác kể từ lần tab này đọc/ghi cuối không.
+// Xem thời điểm sửa của file trước, khác mới đọc file để so cap_nhat (OneDrive chỉ chạm vào file thì không tính).
+async function storeChanged() {
+  try {
+    if (fileHandle) {
+      const fi = await fileHandle.getFile();
+      if (seen.mod != null && fi.lastModified === seen.mod) return null;
+      const text = await fi.text(); if (!text.trim()) return null;
+      const raw = JSON.parse(text); if (!raw || typeof raw.vang !== 'object') return null;
+      if ((raw.cap_nhat || '') === seen.cap) { seen.mod = fi.lastModified; return null; }
+      return { F: normalize(raw), mod: fi.lastModified };
+    }
+    if (VIEW) return null;
+    const c = localStorage.getItem(CAP_KEY);
+    if (c == null || c === seen.cap) return null;
+    return { F: normalize(JSON.parse(localStorage.getItem(KEY))), mod: null };
+  } catch { return null; }
+}
+// Nạp dữ liệu đã bị sửa ở nơi khác: bỏ hoàn tác và các lần lưu đang xếp hàng, đóng hộp thoại đang mở (nó giữ dữ liệu cũ)
+function adopt(F, mod) {
+  gen++; D = F; _cache = null; undoStack.length = 0; ui.plans = null;
+  lastJSON = JSON.stringify(D);
+  try { localStorage.setItem(KEY, lastJSON); localStorage.setItem(CAP_KEY, D.cap_nhat || ''); } catch { }
+  seen = { mod, cap: D.cap_nhat || '' };
+  if (fileHandle) setMark(D.cap_nhat || '');
+  const hadDlg = dlg.open; if (hadDlg) dlg.close();
+  return hadDlg;
+}
 function persist() {
   D.cap_nhat = new Date().toISOString();
-  try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { setStatus('Không lưu được vào trình duyệt: ' + e.message, true); }
-  if (fileHandle) {
-    const text = JSON.stringify(D, null, 2), h = fileHandle, ts = D.cap_nhat;
-    saveChain = saveChain.then(async () => {
-      try { const w = await h.createWritable(); await w.write(text); await w.close(); setMark(ts); setStatus('Đã lưu vào ' + h.name); }
-      catch (e) {
-        setStatus('Lỗi ghi file: ' + e.message, true);
-        if (!saveErrShown) { saveErrShown = true; alert('Không ghi được vào file ' + h.name + ' (' + e.message + ').\nDữ liệu vẫn còn trong trình duyệt. Kiểm tra file rồi vào Tham số → Dữ liệu → Mở file khác… để kết nối lại.'); }
-      }
-    });
-  } else persistStatus();
+  const compact = lastJSON = JSON.stringify(D), text = fileHandle ? JSON.stringify(D, null, 2) : '', ts = D.cap_nhat, h = fileHandle, myGen = gen;
+  saveChain = saveChain.then(async () => {
+    if (myGen !== gen) return;                     // dữ liệu đã được nạp lại từ nơi khác sau lần thay đổi này
+    const ext = await storeChanged();              // trước mỗi lần lưu: nơi lưu bị sửa ở nơi khác thì không ghi đè
+    if (ext) {
+      const name = backupName(); download(name, h ? text : compact, 'application/json');
+      const hadDlg = adopt(ext.F, ext.mod);
+      ui.notice = `Thay đổi vừa rồi chưa được lưu vì dữ liệu đã được sửa ở nơi khác (tab hoặc máy khác). App đã nạp dữ liệu mới, hãy làm lại thao tác.${hadDlg ? ' Hộp thoại đang mở đã đóng lại.' : ''} Bản trình duyệt có thay đổi vừa rồi đã tải về thành <b>${name}</b>.`;
+      return render();
+    }
+    try { localStorage.setItem(KEY, compact); localStorage.setItem(CAP_KEY, ts); } catch (e) { setStatus('Không lưu được vào trình duyệt: ' + e.message, true); }
+    if (!h) { seen = { mod: null, cap: ts }; return persistStatus(); }
+    try {
+      const w = await h.createWritable(); await w.write(text); await w.close();
+      seen = { mod: (await h.getFile()).lastModified, cap: ts };
+      setMark(ts); setStatus('Đã lưu vào ' + h.name);
+    } catch (e) {
+      setStatus('Lỗi ghi file: ' + e.message, true);
+      if (!saveErrShown) { saveErrShown = true; alert('Không ghi được vào file ' + h.name + ' (' + e.message + ').\nDữ liệu vẫn còn trong trình duyệt. Kiểm tra file rồi vào Tham số → Dữ liệu → Mở file khác… để kết nối lại.'); }
+    }
+  });
+}
+// Quay lại tab hoặc cửa sổ: nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
+function checkOnReturn() {
+  if (document.visibilityState !== 'visible' || VIEW || booting || (!fileHandle && pendingHandle)) return;
+  saveChain = saveChain.then(async () => {
+    const ext = await storeChanged(); if (!ext) return;
+    const hadDlg = adopt(ext.F, ext.mod);
+    ui.notice = 'Dữ liệu vừa được cập nhật ở nơi khác (tab hoặc máy khác); app đã nạp bản mới.' + (hadDlg ? ' Hộp thoại đang mở đã đóng lại, hãy mở lại thao tác.' : '');
+    render();
+  });
 }
 function persistStatus() {
   if (VIEW) setStatus('Chế độ xem');
@@ -243,12 +296,12 @@ function commit(label = 'thay đổi', opts = {}) {
   if (opts.noUndo) undoStack.length = 0;
   else { undoStack.push({ label, json: lastJSON }); if (undoStack.length > 10) undoStack.shift(); }
   if (ui.plans) ui.plans = cashPlans(ui.cash);
-  persist(); lastJSON = JSON.stringify(D); render();
+  persist(); render();
 }
 function undo() {
   const u = !VIEW && undoStack.pop(); if (!u) return;
   D = normalize(JSON.parse(u.json)); _cache = null; ui.plans = null;
-  persist(); lastJSON = JSON.stringify(D); render();
+  persist(); render();
 }
 
 // IndexedDB để nhớ file đã chọn giữa các lần mở app
@@ -264,13 +317,15 @@ const idbGet = k => idb('readonly', s => s.get(k));
 const idbSet = (k, v) => idb('readwrite', s => s.put(v, k));
 
 async function useFile(handle, fromNew) {
+  let mod = null, fileCap = '';
   if (!fromNew) {
-    const text = await (await handle.getFile()).text();
+    const fi = await handle.getFile(), text = await fi.text(); mod = fi.lastModified;
     let F = null;
     if (text.trim()) {
       try { F = normalize(JSON.parse(text)); } catch { alert('File này không phải dữ liệu JSON hợp lệ.'); return; }
     }
     if (F) {
+      fileCap = F.cap_nhat || '';
       // Đối chiếu với mốc đồng bộ, không hỏi OK/Hủy:
       // trình duyệt không có thay đổi mới → dùng file; có thay đổi mà file không đổi → ghi bản trình duyệt vào file;
       // cả hai cùng đổi → dùng file, bản trình duyệt tự tải về để không mất
@@ -288,6 +343,7 @@ async function useFile(handle, fromNew) {
       }
     }
   }
+  gen++; seen = { mod, cap: fileCap };   // dấu của nội dung đang nằm trong file (kể cả khi giữ bản trình duyệt để ghi vào)
   fileHandle = handle; pendingHandle = null;
   try { await idbSet('file', handle); } catch { }
   commit('', { noUndo: true });
@@ -1049,6 +1105,8 @@ document.addEventListener('input', e => {
   }
   refreshBuy(f);
 });
+document.addEventListener('visibilitychange', checkOnReturn);
+window.addEventListener('focus', checkOnReturn);
 document.addEventListener('toggle', e => { if (e.target.id === 'buyWhy') ui.whyOpen = e.target.open; }, true);
 for (const ev of ['pointermove', 'pointerdown']) document.addEventListener(ev, e => { const svg = e.target.closest && e.target.closest('svg.chart'); if (svg) chartHover(svg, e); });
 document.addEventListener('keydown', e => {
