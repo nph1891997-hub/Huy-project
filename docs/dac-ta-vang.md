@@ -1,6 +1,42 @@
 # Đặc tả: App quản lý vàng
 
-> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22). Các mục 🧪 là sửa sau buổi review lần 2, **đã làm** (ticket #25–#32) · Ngày: 2026-10-11
+> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22). Các mục 🧪 là sửa sau buổi review lần 2, **đã làm** (ticket #25–#32). Mục 🔬 là kết quả review lần 3 (sau ticket #25–#32), **chưa làm** · Ngày: 2026-10-11
+
+## Review lần 3 🔬 (sau ticket #25–#32)
+
+Review lại code bản 🧪 và giả lập 9 kịch bản trên chính `index.html` chạy trong Chromium (mock File System Access có mô phỏng Chrome xóa trắng file ở hộp Lưu, IndexedDB nhớ file giữa các lần tải lại, đĩa dùng chung giữa 2 máy, đồng hồ giả, ghi lại mọi hộp hỏi và file tải về): lần đầu dùng; để tab mở qua đêm (4 biến thể); 2 máy và 2 tab; file hỏng, rỗng, mất, Tạo file mới trùng tên, mở nhầm bản sao lưu; nhập tiền ở mọi ô và chế độ xem; tiệm hạ giá mua vào, nhắc mua lại tự tắt, hạn mức, Cần tiền, lọc Lịch sử giá; sửa và xóa lần bán, Bán lấy lại vốn, tham số lạ; dữ liệu 20 năm; phím Enter, Esc, Ctrl+Z, bấm Bán… khi dòng giá chưa lưu.
+
+Tất cả 11 mục 🧪 chạy đúng như đặc tả: A11 (qua đêm), A12 (Tạo file mới), A13 (mở chỉ đọc, `cap_nhat` không đổi), A14 (`148.500`), A15 (chế độ xem hỏi lại), A16 (khôi phục vào đúng `tai-san.json`, từ chối quyền không mất nút), A17 (bộ nhớ đầy), A18 (vốn đang giữ), B8 (ghi rõ thiệt, không ghi khi tiệm nâng giá bán ra), B9 (tắt nhắc, Giữ lại nhắc, hoàn tác), B10 (Cần tiền A), B11 (ô mức nhắc), C4 (lọc năm 50–180 ms). Không có lỗi JS nào trong mọi kịch bản. Kết quả còn lại, đánh số tiếp theo bản 🧪:
+
+**A. Lỗi** (đã tái hiện khi giả lập)
+
+| # | Lỗi | Cách sửa | Mục |
+|---|---|---|---|
+| A19 | Tab Lịch sử: bảng **Lời đã chốt theo năm** và cột **Lời đã chốt** của Thống kê theo loại vàng luôn sai: 1 lần bán → 0; nhiều lần bán → bỏ lần đầu, các lần sau ra `NaN` (hiện "—"), số lần bán thiếu 1. Thẻ "Lời đã chốt" ở tab Hôm nay thì đúng. Nguyên nhân: ticket #22 thêm tham số thứ hai `lot` cho `saleCalc(sale, lot)`, nhưng hai chỗ này gọi `ban.map(saleCalc)` nên `lot` nhận chỉ số phần tử (0, 1, 2…) | Gọi `map(b => saleCalc(b))`; nên gom hai chỗ về dùng chung bản đồ lô như `realizedTotal` | 2.5 |
+| A20 | Mở file khác… chọn file `tai-san-truoc-khoi-phuc-….json` (app tự tải về khi khôi phục) hay `du-lieu-cu-trong-trinh-duyet-….json` (chế độ xem tải về): không hỏi khôi phục, app chuyển sang **ghi vào file đó** và nhớ nó cho lần sau; `tai-san.json` vẫn hỏng. Đúng tình huống A16 nhưng với 2 tên file còn lại mà app tự đặt | Thêm 2 tiền tố này vào danh sách tên bản sao lưu (mục 0 "Mở nhầm bản sao lưu") | 0 |
+| A21 | Tham số: "% kỳ vọng mặc định cho lô mới" nhận 0 hoặc âm, "Báo sắp đạt" nhận số âm. Sau đó mọi lần Thêm lô bị chặn "% kỳ vọng phải lớn hơn 0" mà không biết vì đâu | Kiểm tra như ô "% giảm từ đỉnh": kỳ vọng > 0, sắp đạt ≥ 0, sai thì báo và trả về giá trị cũ | 2.6, 3.6 |
+
+**B. Gợi ý chưa thông minh**
+
+| # | Vấn đề | Cách sửa | Mục |
+|---|---|---|---|
+| B12 | Giá chạm đúng mốc mua lại bạn đặt khi bán (150tr) nhưng lô còn lại cùng loại đang ở Nên chốt vì **lời tụt** (giá đang xuống): cột Mua thêm? báo 🟡 Cân nhắc "chốt lô đó, hoặc giữ nó thay cho mua thêm", không có nút Mua lại…, trong khi thẻ 🔁 Có thể mua lại ngay bên dưới vẫn có nút. Hai tín hiệu ngược nhau trên cùng màn hình, không nói rõ vì sao | Khi lô Nên chốt chỉ vì lời tụt (không phải đạt mục tiêu) và giá chạm mốc mua lại: cột ghi "chạm giá mua lại bạn đặt, nhưng lô V-2026-001 đang tụt dưới mức nhắc: muốn mua lại thì nên Giữ tiếp lô đó trước", giữ nút Mua lại… | 2.1c, 3.5 |
+| B13 | Giữ, nâng mục tiêu đúng lúc lời **bằng** mục tiêu (15,0% / 15%): ô "Nhắc chốt nếu lời tụt về" mặc định trống vì quy tắc "không thấp hơn mục tiêu cũ" không còn mức nào hợp lệ; bấm Lưu theo phản xạ là lô không còn được nhắc khi tụt | Khi không có mức ≥ mục tiêu cũ thì lùi về bội số 5% ngay dưới lời hiện tại (ở đây 10%), như hộp Giữ tiếp | 2.1b |
+| B14 | Sau khi Giữ, lô (+15,8%) nằm trong nhóm Giữ thu gọn, không có nút Bán…; muốn bán phải sang tab Lô vàng. Lô ở nhóm Sắp đạt và Đang lỗ lại có nút Bán… | Nhóm Giữ cũng có nút Bán… (nhỏ, như Sắp đạt) | 2.1b |
+
+**C. Luồng chưa hiệu quả, chưa gọn**
+
+| # | Vấn đề | Cách sửa | Mục |
+|---|---|---|---|
+| C5 | Qua nửa đêm **khi đang gõ dở** một dòng giá: ô Ngày tự nhảy sang hôm nay mới, giá rời dòng lưu cho ngày mới mà **không có dòng báo** (dòng "Đã sang ngày…" chỉ hiện khi sang ngày đúng lúc lưu). Hộp Bán mở trước nửa đêm, xác nhận sau nửa đêm thì ngày bán là hôm qua | Khi tự sang ngày lúc đang có con trỏ trong dòng giá thì cũng hiện dòng báo; hộp Bán/Thêm lô lấy ngày lúc xác nhận nếu ô Ngày còn là mặc định | 2.1a |
+| C6 | Màn chờ khi file **mất**: cùng lúc ghi "Không tìm thấy file X" và "Dữ liệu nằm trong file X. Mở lại file để xem…", kèm nút Mở lại X không còn tác dụng | File mất thì bỏ đoạn "Dữ liệu nằm trong file…" và nút Mở lại, chỉ còn Mở file khác… / Tạo file mới… | 0 |
+| C7 | Màn chờ, file hỏng, bấm Mở file khác… rồi chọn đúng file đang nhớ: chỉ báo lỗi, các nút lấy lại (Khôi phục từ bản sao lưu…, Dùng bản trong trình duyệt) không hiện; phải bấm Mở lại mới có | So file vừa chọn với file đang nhớ (`isSameEntry`), cùng file thì xử lý như Mở lại | 0 |
+| C8 | `file-new`: nhánh "chọn trúng một file khác đã có dữ liệu thì coi như mở file đó, không ghi đè" không bao giờ chạy trên Chrome (file đã bị xóa trắng trước khi app đọc), ghi chú trong code nói ngược lại; chọn nhầm một file dữ liệu khác ở hộp Lưu là mất sạch, không có bản tải về | Bỏ nhánh chết và sửa ghi chú; rủi ro đã ghi ở mục 5 (không đọc trước file). Có thể báo rõ trong hộp xác nhận của chính Chrome không được, nên chỉ ghi vào README | 0 |
+| C9 | Thông báo sau Thêm lô "Đã tắt nhắc mua lại… Giữ lại nhắc" vẫn còn sau khi Hoàn tác thêm lô; bấm Giữ lại nhắc lúc đó là một lần "thay đổi" vô nghĩa. Cần tiền ghi "Thiệt do tiệm hạ giá mua vào khoảng 20.046.512 đ" (số ước lượng mà ghi tới hàng đồng; dòng Nên chốt ghi "khoảng 20,0tr") | Hoàn tác thì xóa dòng báo; thiệt ước lượng dùng `fmtTr` | 2.1c, 2.4 |
+
+**Đo trên dữ liệu 20 năm** (21.903 dòng giá, 60 lô, 40 lần bán, file 1,6 MB): mở app 0,4 s; gõ phím ở ô giá 3 ms; rời dòng giá (lưu cả file) dưới 0,5 s; mở Vì sao? 3 biểu đồ 0,18 s; đổi tab 60–100 ms; Lịch sử giá lọc một năm 50–180 ms; quay lại tab khi file không đổi 50 ms.
+
+**Thứ tự làm đề xuất**: A19 (số sai hiện ngay trên màn hình, sửa một dòng) → A20, A21 → B12, B13 → C5–C9.
 
 ## Sửa sau buổi review lần 2 🧪
 
