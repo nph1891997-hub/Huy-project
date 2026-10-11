@@ -1,6 +1,6 @@
 # Đặc tả: App quản lý tài sản — Giai đoạn 1: Vàng
 
-> Trạng thái: **bản nháp chờ duyệt** · Ngày: 2026-10-11
+> Trạng thái: **đã duyệt, đã làm bản đầu tiên (`index.html`)** · Ngày: 2026-10-11
 
 ## 0. Nguyên tắc chung
 
@@ -258,8 +258,20 @@ Bán lấy lại vốn   k = làm tròn lên (V / (w × P)), tối đa n
 
 ---
 
-## 6. Câu hỏi còn mở
+## 6. Các quyết định đã chốt
 
-1. **Lưu vào file `tai-san.json`** (cách chính ở mục 0) có hợp với bạn không? Mỗi lần mở app, bạn bấm chọn file đó một lần (trình duyệt yêu cầu vì lý do bảo mật).
-2. **"Bán một nửa"** khi số món lẻ thì làm tròn **lên** (5 món → bán 3) như trên, hay làm tròn **xuống**?
-3. Tab **"Cần tiền"** có cần cho phép **loại trừ lô** (ví dụ "lô này để dành, đừng gợi ý bán") không?
+1. **Lưu vào file `tai-san.json`**: đồng ý. Lần đầu bấm **Tạo file mới…**; những lần sau app nhớ file và chỉ cần bấm **Mở lại tai-san.json** một lần.
+2. **"Bán một nửa" khi số món lẻ**: làm tròn **lên** (5 món → bán 3). Lý do: lô chỉ còn 1 món thì làm tròn xuống sẽ thành bán 0 món.
+3. **Không cần loại trừ lô** ở tab Cần tiền.
+4. **Phương án Cần tiền**: sau khi chọn lô theo thứ tự ưu tiên, app **bỏ bớt món thừa**: món nào bỏ đi mà vẫn đủ tiền thì không bán.
+
+## 7. Dung lượng file JSON về lâu dài
+
+| Loại dữ liệu | Ước tính 20 năm | Dung lượng |
+|---|---|---|
+| Lô vàng | ~1.000 lô | ~0,3 MB |
+| Lần bán | ~2.000 lần | ~0,4 MB |
+| Giá (3 loại, nhập mỗi ngày) | ~22.000 dòng | ~2 MB |
+| **Tổng** | | **~3 MB** |
+
+File vài MB trình duyệt đọc và ghi trong chưa tới 0,1 giây. JSON chỉ thành vấn đề khi lên hàng trăm MB, tức là gấp hàng trăm lần mức trên. Nếu một ngày nào đó lịch sử giá quá dài, có thể chuyển phần giá cũ sang file lưu trữ riêng mà không phải đổi app.

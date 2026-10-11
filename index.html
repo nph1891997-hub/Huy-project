@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quản lý tài sản</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--line:#e2e5e9;--text:#1d2329;--muted:#6b7580;--accent:#a8760a;--green:#17803f;--red:#c0392b;--yellow:#a86b00;--blue:#2563eb}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.bar{max-width:1400px;margin:0 auto;padding:8px 16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;margin-right:10px;color:var(--accent)}
+.spacer{flex:1}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{background:none;border:0;padding:7px 12px;border-radius:6px;cursor:pointer;font:inherit;color:var(--muted)}
+nav button.on{background:#fbf3e0;color:var(--accent);font-weight:600}
+#status{font-size:12px;color:var(--muted)}
+#status.err{color:var(--red)}
+main{max-width:1400px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 10px}
+.card h3{font-size:14px;margin:14px 0 6px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfc}
+td.n,th.n{text-align:right}
+tr.total td{font-weight:600;background:#fafbfc}
+.pos{color:var(--green)}.neg{color:var(--red)}.muted{color:var(--muted)}.small{font-size:12px}
+button,.btn{font:inherit;border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--text)}
+button:hover{border-color:#b9c0c8}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{color:var(--red)}
+button.sm{padding:2px 8px;font-size:12px}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{font:inherit;border:1px solid #cdd3da;border-radius:6px;padding:5px 8px;background:#fff;color:var(--text)}
+input.money{text-align:right;width:150px}
+input.w{width:56px;text-align:right}
+input[type=number]{width:90px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+.field{display:flex;flex-direction:column;gap:3px}
+.field>span{font-size:12px;color:var(--muted)}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;background:#eef1f4}
+.grp-chot h2{color:var(--green)}.grp-sap h2{color:var(--yellow)}.grp-lo h2{color:var(--red)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:10px}
+.stat b{display:block;font-size:18px}
+.stat span{font-size:12px;color:var(--muted)}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+.warn{background:#fff4e5;border:1px solid #f3d19c;border-radius:6px;padding:6px 10px;margin:8px 0}
+.note{background:#eef4ff;border:1px solid #c9d8f5;border-radius:6px;padding:8px 10px;margin-bottom:12px}
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;max-width:640px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(20,25,30,.35)}
+dialog form{padding:16px}
+dialog h2{margin:0 0 12px;font-size:17px}
+.dlg-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.preview{background:#fafbfc;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px}
+.preview td{border:0;padding:2px 6px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <span class="brand">🟡 Tài sản</span>
+    <nav id="tabs"></nav>
+    <span class="spacer"></span>
+    <span id="status"></span>
+    <button id="btnReconnect" class="hidden" data-act="file-reconnect"></button>
+    <button data-act="file-open" class="fsa">Mở file…</button>
+    <button data-act="file-new" class="fsa">Tạo file mới…</button>
+    <button data-act="export-json">Xuất JSON</button>
+    <button data-act="import-json">Nhập JSON</button>
+    <button data-act="export-csv">Xuất CSV</button>
+    <input type="file" id="importFile" accept=".json,application/json" class="hidden">
+  </div>
+</header>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+
+<script>
+'use strict';
+// ===================== Hằng số & tiện ích =====================
+const KEY = 'tai-san-v1';
+const UNITS = [['luong', 10000, 'lượng'], ['chi', 1000, 'chỉ'], ['phan', 100, 'phân'], ['ly', 10, 'ly'], ['dem', 1, 'dem']];
+const UNIT_DEM = { luong: 10000, chi: 1000 };
+const UNIT_NAME = { luong: 'lượng', chi: 'chỉ' };
+const TABS = [['homnay', 'Hôm nay'], ['lo', 'Lô vàng'], ['cantien', 'Cần tiền'], ['lichsu', 'Lịch sử'], ['thamso', 'Tham số']];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+const fmtD = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const digits = x => (x == null || x === '' || isNaN(x)) ? '' : Math.round(x).toLocaleString('vi-VN');
+const parseM = s => Number(String(s ?? '').replace(/\D/g, '')) || 0;
+const parseN = s => { const v = Number(String(s ?? '').replace(',', '.')); return isNaN(v) ? 0 : v; };
+const fmtM = x => (x == null || isNaN(x)) ? '—' : Math.round(x).toLocaleString('vi-VN') + ' đ';
+const fmtMS = x => (x == null || isNaN(x)) ? '—' : (x > 0.5 ? '+' : '') + fmtM(x);
+const fmtP = (x, sign = true) => (x == null || isNaN(x) || !isFinite(x)) ? '—' :
+  (sign && x > 0 ? '+' : '') + (x * 100).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const cls = x => x > 0.5 ? 'pos' : x < -0.5 ? 'neg' : '';
+const clsP = x => x > 0 ? 'pos' : x < 0 ? 'neg' : '';
+function fmtW(dem) {
+  if (!dem) return '0';
+  const parts = []; let r = dem;
+  for (const [, v, name] of UNITS) { const q = Math.floor(r / v); r -= q * v; if (q) parts.push(q + ' ' + name); }
+  return parts.join(' ');
+}
+function splitW(dem) { const o = {}; let r = dem; for (const [k, v] of UNITS) { o[k] = Math.floor(r / v); r -= o[k] * v; } return o; }
+
+// ===================== Dữ liệu =====================
+function emptyData() {
+  return {
+    phien_ban: 1, cap_nhat: '',
+    tham_so: { lai_suat_ngan_hang: 5.5, lam_phat: 3.5, vang_ky_vong_mac_dinh: 15, vang_sap_dat_mac_dinh: 2 },
+    vang: { loai: [], gia: [], lo: [], ban: [], so_thu_tu: { lo: {}, ban: 0 } },
+    tiet_kiem: [], cctg: [], dat: []
+  };
+}
+function normalize(d) {
+  const e = emptyData();
+  d = d && typeof d === 'object' ? d : {};
+  d.phien_ban = d.phien_ban || 1;
+  d.tham_so = Object.assign(e.tham_so, d.tham_so || {});
+  d.vang = Object.assign(e.vang, d.vang || {});
+  d.vang.so_thu_tu = Object.assign({ lo: {}, ban: 0 }, d.vang.so_thu_tu || {});
+  for (const k of ['tiet_kiem', 'cctg', 'dat']) if (!Array.isArray(d[k])) d[k] = [];
+  return d;
+}
+let D = (() => { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch { return emptyData(); } })();
+
+// ----- Lưu: trình duyệt + file -----
+let fileHandle = null, saveChain = Promise.resolve();
+const hasFSA = 'showOpenFilePicker' in window;
+function setStatus(msg, err) { const s = $('#status'); s.textContent = msg; s.className = err ? 'err' : ''; }
+function persist() {
+  D.cap_nhat = new Date().toISOString();
+  try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { setStatus('Không lưu được vào trình duyệt: ' + e.message, true); }
+  if (fileHandle) {
+    const text = JSON.stringify(D, null, 2), h = fileHandle;
+    saveChain = saveChain.then(async () => {
+      try { const w = await h.createWritable(); await w.write(text); await w.close(); setStatus('Đã lưu vào ' + h.name); }
+      catch (e) { setStatus('Lỗi ghi file: ' + e.message, true); }
+    });
+  } else setStatus(hasFSA ? 'Đang lưu trong trình duyệt — nên chọn file dữ liệu' : 'Đang lưu trong trình duyệt — nhớ Xuất JSON để sao lưu', !!hasFSA);
+}
+function commit() { persist(); render(); }
+
+// IndexedDB để nhớ file đã chọn giữa các lần mở app
+function idb(mode, fn) {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open('tai-san', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+    rq.onerror = () => rej(rq.error);
+    rq.onsuccess = () => { const tx = rq.result.transaction('kv', mode); const r = fn(tx.objectStore('kv')); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); };
+  });
+}
+const idbGet = k => idb('readonly', s => s.get(k));
+const idbSet = (k, v) => idb('readwrite', s => s.put(v, k));
+
+async function useFile(handle, fromNew) {
+  if (!fromNew) {
+    const text = await (await handle.getFile()).text();
+    let F = null;
+    if (text.trim()) {
+      try { F = normalize(JSON.parse(text)); } catch { alert('File này không phải dữ liệu JSON hợp lệ.'); return; }
+    }
+    if (F) {
+      const localNewer = (D.cap_nhat || '') > (F.cap_nhat || '') && D.vang.lo.length > 0;
+      const same = JSON.stringify(F) === JSON.stringify(D);
+      if (!same && localNewer && confirm('Dữ liệu trong trình duyệt MỚI HƠN dữ liệu trong file "' + handle.name + '".\n\nOK = giữ dữ liệu trình duyệt và ghi đè vào file.\nHủy = dùng dữ liệu trong file.')) { /* giữ D */ }
+      else D = F;
+    }
+  }
+  fileHandle = handle;
+  try { await idbSet('file', handle); } catch { }
+  $('#btnReconnect').classList.add('hidden');
+  commit();
+}
+
+// ===================== Tính toán vàng =====================
+const r = () => D.tham_so.lai_suat_ngan_hang / 100;
+const pi = () => D.tham_so.lam_phat / 100;
+const typeById = id => D.vang.loai.find(t => t.id === id);
+const lotById = id => D.vang.lo.find(l => l.id === id);
+function latestPrice(typeId) {
+  let best = null;
+  D.vang.gia.forEach((p, i) => { if (p.loai_id === typeId && (!best || p.ngay >= best.ngay)) best = p; });
+  return best;
+}
+const soldMon = lotId => D.vang.ban.reduce((a, b) => a + (b.lo_id === lotId ? b.so_mon : 0), 0);
+function lotW(lot) { const t = typeById(lot.loai_id); return lot.trong_luong_mon_dem / UNIT_DEM[t ? t.don_vi_niem_yet : 'chi']; }
+function lotState(lot, asOf = today()) {
+  const t = typeById(lot.loai_id);
+  const w = lotW(lot);
+  const n = lot.so_mon - soldMon(lot.id);
+  const costMon = lot.tong_tien_mua / lot.so_mon;
+  const V = n * costMon;
+  const d = Math.max(0, days(lot.ngay_mua, asOf));
+  const p = latestPrice(lot.loai_id);
+  const s = { lot, t, w, n, costMon, V, d, p, hasPrice: !!p, kv: lot.ky_vong_pct / 100, sd: lot.sap_dat_pct / 100 };
+  if (!p) return s;
+  s.P = p.mua_vao; s.valMon = w * s.P;
+  s.G = n * s.valMon; s.L = s.G - V; s.g = V > 0 ? s.G / V - 1 : 0;
+  s.annual = d >= 30 ? Math.pow(1 + s.g, 365 / d) - 1 : null;
+  s.B = V * (1 + r() * d / 365); s.vsBank = s.G - s.B;
+  s.real = (1 + s.g) / Math.pow(1 + pi(), d / 365) - 1;
+  s.targetPrice = n > 0 ? V * (1 + s.kv) / (n * w) : null;
+  s.breakEven = s.G > 0 ? V / s.G - 1 : null;
+  s.grp = s.g >= s.kv ? 'chot' : s.g < 0 ? 'lo' : s.g >= s.kv - s.sd ? 'sap' : 'giu';
+  return s;
+}
+function saleCalc(sale) {
+  const lot = lotById(sale.lo_id); if (!lot) return null;
+  const w = lotW(lot), costMon = lot.tong_tien_mua / lot.so_mon, d = Math.max(0, days(lot.ngay_mua, sale.ngay));
+  const thu = sale.so_mon * w * sale.gia_ban, von = sale.so_mon * costMon, loi = thu - von;
+  const bank = von * (1 + r() * d / 365);
+  return { lot, w, d, thu, von, loi, g: von > 0 ? loi / von : 0, bank, vsBank: thu - bank };
+}
+const openLots = () => D.vang.lo.filter(l => l.so_mon - soldMon(l.id) > 0);
+const realizedTotal = () => D.vang.ban.reduce((a, b) => { const c = saleCalc(b); return a + (c ? c.loi : 0); }, 0);
+const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(s.n, Math.max(1, Math.ceil(s.V / s.valMon))) };
+
+// ===================== Giao diện chung =====================
+let tab = 'homnay';
+const ui = { loStatus: 'open', loType: '', loOpen: null, lsYear: '', cash: 0, plans: null };
+function render() {
+  $('#tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-k="${k}">${n}</button>`).join('');
+  const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
+  $('#app').innerHTML = v();
+}
+const card = (title, body, extra = '') => `<section class="card ${extra}">${title ? `<h2>${title}</h2>` : ''}${body}</section>`;
+const typeOptions = (sel, withAll) => (withAll ? `<option value="">Tất cả loại</option>` : '') +
+  D.vang.loai.map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.ten)}</option>`).join('');
+
+// ===================== Tab: Hôm nay =====================
+function viewHomNay() {
+  if (!D.vang.loai.length) return card('Bắt đầu', `<p>Chưa có loại vàng nào. Hãy thêm lô đầu tiên (có thể tạo loại vàng ngay trong form), hoặc tạo loại vàng ở tab <b>Tham số</b>.</p>
+    <button class="primary" data-act="lot-add">+ Thêm lô</button>`);
+  const priceRows = D.vang.loai.map(t => {
+    const p = latestPrice(t.id);
+    const spread = p && p.ban_ra ? 1 - p.mua_vao / p.ban_ra : null;
+    return `<tr><td>${esc(t.ten)}</td><td>${UNIT_NAME[t.don_vi_niem_yet]}</td>
+      <td><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="0"></td>
+      <td><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="0"></td>
+      <td class="n">${fmtP(spread, false)}</td><td class="muted small">${p ? 'giá ngày ' + fmtD(p.ngay) : 'chưa có giá'}</td></tr>`;
+  }).join('');
+  let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" required></label></div>
+    <div class="scroll"><table><tr><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n">Chênh lệch</th><th></th></tr>${priceRows}</table></div>
+    <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>`);
+
+  const sts = openLots().map(l => lotState(l));
+  const priced = sts.filter(s => s.hasPrice), noPrice = sts.filter(s => !s.hasPrice);
+  const sumV = priced.reduce((a, s) => a + s.V, 0), sumG = priced.reduce((a, s) => a + s.G, 0), rz = realizedTotal();
+  html += card('', `<div class="stats">
+    <div class="stat"><span>Vốn đang giữ</span><b>${fmtM(sumV)}</b></div>
+    <div class="stat"><span>Giá trị hôm nay</span><b>${fmtM(sumG)}</b></div>
+    <div class="stat"><span>Lời tạm tính</span><b class="${cls(sumG - sumV)}">${fmtMS(sumG - sumV)}</b><span>${fmtP(sumV ? sumG / sumV - 1 : null)}</span></div>
+    <div class="stat"><span>Lời đã chốt (từ trước đến nay)</span><b class="${cls(rz)}">${fmtMS(rz)}</b></div>
+    <div class="stat"><span>Tổng lời</span><b class="${cls(sumG - sumV + rz)}">${fmtMS(sumG - sumV + rz)}</b></div></div>`);
+
+  const groups = [
+    ['chot', '🟢 Nên chốt — đã đạt mục tiêu', s => `<button class="sm" data-act="sell" data-id="${esc(s.lot.id)}" data-k="het">Bán hết</button>
+       <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}" data-k="von">Lấy lại vốn</button>
+       <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}" data-k="nua">Bán một nửa</button>
+       <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Tự chọn</button>`],
+    ['sap', '🟡 Sắp đạt — theo dõi', s => `còn ${fmtP(s.kv - s.g, false)} · cần giá ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]} <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán</button>`],
+    ['giu', '⚪ Giữ — đang lời, chưa đạt', s => `còn ${fmtP(s.kv - s.g, false)} · cần giá ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]}`],
+    ['lo', '🔴 Đang lỗ — không nên bán, trừ khi cần tiền', s => `cần giá tăng ${fmtP(s.breakEven, false)} để hòa vốn <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán</button>`]
+  ];
+  for (const [g, title, extra] of groups) {
+    const list = priced.filter(s => s.grp === g).sort((a, b) => b.g - a.g);
+    if (!list.length) continue;
+    html += card(`${title} (${list.length})`, `<div class="scroll">${lotStateTable(list, extra)}</div>`, 'grp-' + g);
+  }
+  if (noPrice.length) html += card('Lô chưa có giá', `<p class="muted">Nhập giá cho loại vàng của các lô sau để xem gợi ý: ${noPrice.map(s => esc(s.lot.id)).join(', ')}</p>`);
+  if (!sts.length) html += card('', `<p class="muted">Chưa có lô nào đang giữ.</p>`);
+
+  const rebuy = D.vang.ban.filter(b => b.gia_mua_lai > 0).map(b => {
+    const lot = lotById(b.lo_id); const p = lot && latestPrice(lot.loai_id);
+    return { b, lot, p, hit: p && p.ban_ra && p.ban_ra <= b.gia_mua_lai };
+  }).filter(x => x.lot);
+  if (rebuy.length) {
+    html += card('🔁 Nhắc mua lại', `<div class="scroll"><table><tr><th>Lần bán</th><th>Lô</th><th>Loại</th><th>Ngày bán</th><th class="n">Giá đã bán</th><th class="n">Giá muốn mua lại</th><th class="n">Tiệm bán ra hiện tại</th><th></th><th></th></tr>
+      ${rebuy.sort((a, b) => !!b.hit - !!a.hit).map(x => `<tr><td>${esc(x.b.id)}</td><td>${esc(x.lot.id)}</td><td>${esc(typeById(x.lot.loai_id)?.ten)}</td><td>${fmtD(x.b.ngay)}</td>
+        <td class="n">${fmtM(x.b.gia_ban)}</td><td class="n">${fmtM(x.b.gia_mua_lai)}</td><td class="n">${x.p && x.p.ban_ra ? fmtM(x.p.ban_ra) : '—'}</td>
+        <td>${x.hit ? '<span class="tag pos">✔ Có thể mua lại</span>' : '<span class="muted small">chưa tới</span>'}</td>
+        <td><button class="sm" data-act="rebuy-clear" data-id="${esc(x.b.id)}">Bỏ nhắc</button></td></tr>`).join('')}</table></div>`);
+  }
+  return html;
+}
+function lotStateTable(list, extra) {
+  return `<table><tr><th>Lô</th><th>Loại</th><th>Còn lại</th><th>Ngày mua</th><th class="n">Ngày giữ</th><th class="n">Vốn còn lại</th><th class="n">Giá trị hôm nay</th>
+    <th class="n">Lời/lỗ</th><th class="n">%</th><th class="n">Mục tiêu</th><th class="n">%/năm</th><th class="n">So với gửi NH</th><th class="n">Lãi thực</th><th></th></tr>
+    ${list.map(s => `<tr><td><b>${esc(s.lot.id)}</b></td><td>${esc(s.t?.ten)}</td><td>${s.n} × ${fmtW(s.lot.trong_luong_mon_dem)}</td><td>${fmtD(s.lot.ngay_mua)}</td>
+      <td class="n">${s.d}</td><td class="n">${fmtM(s.V)}</td><td class="n">${fmtM(s.G)}</td>
+      <td class="n ${cls(s.L)}">${fmtMS(s.L)}</td><td class="n ${clsP(s.g)}"><b>${fmtP(s.g)}</b></td><td class="n">${fmtP(s.kv, false)}</td>
+      <td class="n ${clsP(s.annual)}">${fmtP(s.annual)}</td><td class="n ${cls(s.vsBank)}" title="Nếu gửi ngân hàng: ${fmtM(s.B)}">${fmtMS(s.vsBank)}</td>
+      <td class="n ${clsP(s.real)}">${fmtP(s.real)}</td><td>${extra(s)}</td></tr>`).join('')}</table>`;
+}
+
+// ===================== Tab: Lô vàng =====================
+function viewLo() {
+  let lots = D.vang.lo.slice().sort((a, b) => b.ngay_mua.localeCompare(a.ngay_mua) || b.id.localeCompare(a.id));
+  lots = lots.filter(l => {
+    const n = l.so_mon - soldMon(l.id);
+    if (ui.loStatus === 'open' && n <= 0) return false;
+    if (ui.loStatus === 'closed' && n > 0) return false;
+    return !ui.loType || l.loai_id === ui.loType;
+  });
+  const rows = lots.map(l => {
+    const n = l.so_mon - soldMon(l.id), sold = l.so_mon - n;
+    const t = typeById(l.loai_id);
+    let r = `<tr><td><b>${esc(l.id)}</b></td><td>${esc(t?.ten)}</td><td>${fmtD(l.ngay_mua)}</td><td>${l.so_mon} × ${fmtW(l.trong_luong_mon_dem)}</td>
+      <td>${n > 0 ? n + ' món · ' + fmtW(n * l.trong_luong_mon_dem) : '—'}</td><td class="n">${fmtM(l.tong_tien_mua)}</td>
+      <td class="n">${fmtM(l.tong_tien_mua / (l.so_mon * lotW(l)))}/${UNIT_NAME[t?.don_vi_niem_yet] || ''}</td>
+      <td class="n">${fmtP(l.ky_vong_pct / 100, false)}</td><td>${n > 0 ? '<span class="tag">Đang giữ</span>' : '<span class="tag muted">Đã đóng</span>'}</td>
+      <td>${n > 0 ? `<button class="sm" data-act="sell" data-id="${esc(l.id)}">Bán</button> ` : ''}
+        <button class="sm" data-act="lot-detail" data-id="${esc(l.id)}">${ui.loOpen === l.id ? 'Ẩn' : 'Chi tiết'}</button>
+        <button class="sm" data-act="lot-edit" data-id="${esc(l.id)}">Sửa</button>
+        <button class="sm danger" data-act="lot-del" data-id="${esc(l.id)}" ${sold ? 'disabled title="Lô đã có lần bán, không xóa được"' : ''}>Xóa</button></td></tr>`;
+    if (ui.loOpen === l.id) r += `<tr><td colspan="10" style="background:#fafbfc;white-space:normal">${lotDetail(l)}</td></tr>`;
+    return r;
+  }).join('');
+  return card('Lô vàng', `<div class="row">
+      <button class="primary" data-act="lot-add">+ Thêm lô</button>
+      <select id="loStatus">${[['open', 'Đang giữ'], ['closed', 'Đã đóng'], ['all', 'Tất cả']].map(([k, n]) => `<option value="${k}" ${ui.loStatus === k ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <select id="loType">${typeOptions(ui.loType, true)}</select></div>
+    <div class="scroll"><table><tr><th>Lô</th><th>Loại</th><th>Ngày mua</th><th>Lúc mua</th><th>Còn lại</th><th class="n">Tổng tiền mua</th><th class="n">Giá mua</th><th class="n">Kỳ vọng</th><th>Trạng thái</th><th></th></tr>
+    ${rows || '<tr><td colspan="10" class="muted">Không có lô nào.</td></tr>'}</table></div>`);
+}
+function lotDetail(l) {
+  const s = lotState(l);
+  const sales = D.vang.ban.filter(b => b.lo_id === l.id).sort((a, b) => a.ngay.localeCompare(b.ngay));
+  let h = l.ghi_chu ? `<p><b>Ghi chú:</b> ${esc(l.ghi_chu)}</p>` : '';
+  if (s.n > 0 && s.hasPrice) h += `<p>Hôm nay: giá trị ${fmtM(s.G)}, lời/lỗ <span class="${cls(s.L)}">${fmtMS(s.L)} (${fmtP(s.g)})</span>, so với gửi ngân hàng <span class="${cls(s.vsBank)}">${fmtMS(s.vsBank)}</span>.</p>`;
+  h += sales.length ? `<b>Lịch sử bán</b>${salesTable(sales, false)}` : '<p class="muted">Chưa bán lần nào.</p>';
+  return h;
+}
+
+// ===================== Tab: Cần tiền =====================
+function cashPlans(X) {
+  const sts = openLots().map(l => lotState(l)).filter(s => s.hasPrice && s.n > 0 && s.valMon > 0);
+  const prof = sts.filter(s => s.g >= 0), loss = sts.filter(s => s.g < 0).sort((a, b) => b.g - a.g);
+  const got = rows => rows.reduce((a, x) => a + x.k * x.s.valMon, 0);
+  const fill = (order, rows = []) => {
+    rows = rows.slice(); let have = got(rows);
+    for (const s of order) {
+      if (have >= X) break;
+      const k = Math.min(s.n, Math.ceil((X - have) / s.valMon));
+      rows.push({ s, k }); have += k * s.valMon;
+    }
+    return rows;
+  };
+  // Bỏ bớt món thừa: nếu bỏ một món mà vẫn đủ tiền thì không bán món đó (xét từ lô ít ưu tiên nhất)
+  const prune = rows => {
+    rows = rows.map(x => ({ ...x })); let have = got(rows);
+    for (let i = rows.length - 1; i >= 0; i--) while (rows[i].k > 0 && have - rows[i].s.valMon >= X) { rows[i].k--; have -= rows[i].s.valMon; }
+    return rows.filter(x => x.k > 0);
+  };
+  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => (b.g >= b.kv) - (a.g >= a.kv) || b.g - a.g))));
+  const single = prof.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
+    .sort((a, b) => (a.k * a.s.valMon - X) - (b.k * b.s.valMon - X));
+  const B = single.length ? [single[0]] : prune(fill(loss, fill(prof.slice().sort((a, b) => b.n * b.valMon - a.n * a.valMon))));
+  const C = prune(fill(loss, fill(prof.slice().sort((a, b) => a.g - b.g))));
+  const toPlan = (name, desc, rows) => ({ name, desc, rows: rows.map(x => ({ id: x.s.lot.id, k: x.k })) });
+  const plans = [
+    toPlan('A. Chốt lời tốt nhất', 'Lô đạt mục tiêu trước, rồi lô lời % cao nhất', A),
+    toPlan('B. Ít lô nhất', 'Ưu tiên một lô bán vừa đủ, hạn chế cắt lẻ nhiều lô', B),
+    toPlan('C. Giữ lô tốt', 'Bán lô lời ít trước, giữ lô lời nhiều cho chạy tiếp', C)
+  ];
+  const key = p => JSON.stringify(p.rows);
+  plans.forEach((p, i) => { const j = plans.findIndex(q => key(q) === key(p)); if (j < i) p.same = plans[j].name.slice(0, 1); });
+  return plans;
+}
+function planSummary(plan, X) {
+  let thu = 0, von = 0, lossLoi = 0, lossVsBank = 0, valid = true;
+  const rows = plan.rows.map(r => {
+    const lot = lotById(r.id); const s = lotState(lot);
+    if (r.k > s.n || r.k < 0) valid = false;
+    const t = r.k * s.valMon, v = r.k * s.costMon, bank = v * (1 + r_() * s.d / 365);
+    thu += t; von += v;
+    if (t - v < 0) { lossLoi += t - v; lossVsBank += t - bank; }
+    return { r, s, t, v, loi: t - v };
+  });
+  const totalDem = openLots().reduce((a, l) => a + (l.so_mon - soldMon(l.id)) * l.trong_luong_mon_dem, 0) -
+    rows.reduce((a, x) => a + x.r.k * x.s.lot.trong_luong_mon_dem, 0);
+  const totalV = openLots().reduce((a, l) => a + lotState(l).V, 0) - von;
+  return { rows, thu, von, loi: thu - von, du: thu - X, lossLoi, lossVsBank, totalDem, totalV, valid };
+}
+const r_ = () => r();
+function viewCanTien() {
+  let html = card('Cần tiền', `<form id="cashForm"><div class="row">
+    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${digits(ui.cash) || ''}" placeholder="0" required style="width:200px"></label>
+    <button class="primary" type="submit">Gợi ý</button></div></form>
+    <p class="muted small">Tính theo giá tiệm mua vào gần nhất của từng loại. Không đụng lô lỗ nếu các lô lời đã đủ tiền; thiếu thì lấy lô lỗ ít % nhất trước. Bán theo từng món nên có thể dư một chút.</p>`);
+  if (!ui.plans) return html;
+  const X = ui.cash;
+  const totalAvail = openLots().map(l => lotState(l)).filter(s => s.hasPrice).reduce((a, s) => a + s.G, 0);
+  if (totalAvail < X) html += `<div class="warn">⚠️ Bán hết tất cả các lô (có giá) cũng chỉ được ${fmtM(totalAvail)}, còn thiếu <b>${fmtM(X - totalAvail)}</b>.</div>`;
+  html += '<div class="plans">' + ui.plans.map((p, pi_) => {
+    const S = planSummary(p, X);
+    return `<section class="card"><h2>${esc(p.name)}</h2><p class="muted small">${esc(p.desc)}${p.same ? ` · <b>trùng với phương án ${p.same}</b>` : ''}</p>
+      <table><tr><th>Lô</th><th>Loại</th><th class="n">Bán (món)</th><th class="n">Còn</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ</th></tr>
+      ${S.rows.map((x, ri) => `<tr><td>${esc(x.s.lot.id)}</td><td>${esc(x.s.t?.ten)}<br><span class="small muted">${fmtW(x.s.lot.trong_luong_mon_dem)}/món</span></td>
+        <td class="n"><input type="number" min="0" max="${x.s.n}" value="${x.r.k}" data-plan="${pi_}" data-row="${ri}" style="width:64px"></td><td class="n">${x.s.n}</td>
+        <td class="n">${fmtM(x.t)}</td><td class="n ${cls(x.loi)}">${fmtMS(x.loi)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Không có lô phù hợp.</td></tr>'}
+      <tr class="total"><td colspan="4">Tổng thu</td><td class="n">${fmtM(S.thu)}</td><td class="n ${cls(S.loi)}">${fmtMS(S.loi)}</td></tr></table>
+      <table class="preview" style="margin-top:8px">
+        <tr><td>${S.du >= 0 ? 'Dư so với số cần' : 'Còn thiếu'}</td><td class="n ${S.du >= 0 ? '' : 'neg'}">${fmtM(Math.abs(S.du))}</td></tr>
+        <tr><td>Vàng còn lại sau khi bán</td><td class="n">${fmtW(S.totalDem)}</td></tr>
+        <tr><td>Vốn còn lại sau khi bán</td><td class="n">${fmtM(S.totalV)}</td></tr></table>
+      ${S.lossLoi < 0 ? `<div class="warn">⚠️ Có bán lỗ: lỗ chốt <b>${fmtM(-S.lossLoi)}</b>; so với nếu gửi ngân hàng thì thiệt <b>${fmtM(-S.lossVsBank)}</b>.</div>` : ''}
+      ${S.valid ? '' : '<div class="warn">Số món bán vượt quá số món còn lại.</div>'}
+      <div class="dlg-actions"><button class="primary" data-act="plan-confirm" data-plan="${pi_}" ${S.valid && S.thu > 0 ? '' : 'disabled'}>Xác nhận bán</button></div></section>`;
+  }).join('') + '</div>';
+  return html;
+}
+
+// ===================== Tab: Lịch sử =====================
+function salesTable(sales, withLot = true) {
+  return `<div class="scroll"><table><tr><th>Mã</th><th>Ngày</th>${withLot ? '<th>Lô</th><th>Loại</th>' : ''}<th>Bán</th><th class="n">Giá bán</th><th class="n">Tiền thu</th><th class="n">Vốn</th>
+    <th class="n">Lời/lỗ</th><th class="n">%</th><th class="n">So với gửi NH</th><th class="n">Muốn mua lại</th><th>Ghi chú</th><th></th></tr>
+    ${sales.map(b => {
+      const c = saleCalc(b); if (!c) return '';
+      const t = typeById(c.lot.loai_id);
+      return `<tr><td>${esc(b.id)}</td><td>${fmtD(b.ngay)}</td>${withLot ? `<td>${esc(b.lo_id)}</td><td>${esc(t?.ten)}</td>` : ''}
+        <td>${b.so_mon} × ${fmtW(c.lot.trong_luong_mon_dem)}</td><td class="n">${fmtM(b.gia_ban)}/${UNIT_NAME[t?.don_vi_niem_yet] || ''}</td>
+        <td class="n">${fmtM(c.thu)}</td><td class="n">${fmtM(c.von)}</td><td class="n ${cls(c.loi)}">${fmtMS(c.loi)}</td><td class="n ${clsP(c.g)}">${fmtP(c.g)}</td>
+        <td class="n ${cls(c.vsBank)}">${fmtMS(c.vsBank)}</td><td class="n">${b.gia_mua_lai ? fmtM(b.gia_mua_lai) : ''}</td><td>${esc(b.ghi_chu)}</td>
+        <td><button class="sm danger" data-act="sale-undo" data-id="${esc(b.id)}">Hoàn tác</button></td></tr>`;
+    }).join('')}</table></div>`;
+}
+function viewLichSu() {
+  const years = [...new Set(D.vang.ban.map(b => b.ngay.slice(0, 4)))].sort().reverse();
+  const sales = D.vang.ban.filter(b => !ui.lsYear || b.ngay.startsWith(ui.lsYear)).sort((a, b) => b.ngay.localeCompare(a.ngay) || b.id.localeCompare(a.id));
+  const byYear = years.map(y => {
+    const list = D.vang.ban.filter(b => b.ngay.startsWith(y)).map(saleCalc).filter(Boolean);
+    return `<tr><td>${y}</td><td class="n">${list.length}</td><td class="n">${fmtM(list.reduce((a, c) => a + c.thu, 0))}</td><td class="n ${cls(list.reduce((a, c) => a + c.loi, 0))}">${fmtMS(list.reduce((a, c) => a + c.loi, 0))}</td></tr>`;
+  }).join('');
+  let html = card('Lịch sử bán', `<div class="row"><select id="lsYear"><option value="">Tất cả các năm</option>${years.map(y => `<option ${ui.lsYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+    ${sales.length ? salesTable(sales) : '<p class="muted">Chưa có lần bán nào.</p>'}
+    ${years.length ? `<h3>Lời đã chốt theo năm</h3><table style="width:auto"><tr><th>Năm</th><th class="n">Số lần bán</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ chốt</th></tr>${byYear}</table>` : ''}`);
+  const typeRows = D.vang.loai.map(t => {
+    const sts = D.vang.lo.filter(l => l.loai_id === t.id).map(l => lotState(l)).filter(s => s.n > 0);
+    const V = sts.reduce((a, s) => a + s.V, 0), G = sts.every(s => s.hasPrice) ? sts.reduce((a, s) => a + s.G, 0) : null;
+    const dem = sts.reduce((a, s) => a + s.n * s.lot.trong_luong_mon_dem, 0);
+    const rz = D.vang.ban.map(saleCalc).filter(c => c && c.lot.loai_id === t.id).reduce((a, c) => a + c.loi, 0);
+    return `<tr><td>${esc(t.ten)}</td><td>${fmtW(dem)}</td><td class="n">${fmtM(V)}</td><td class="n">${G == null ? '—' : fmtM(G)}</td>
+      <td class="n ${cls(G - V)}">${G == null ? '—' : fmtMS(G - V)}</td><td class="n ${cls(rz)}">${fmtMS(rz)}</td></tr>`;
+  }).join('');
+  html += card('Thống kê theo loại vàng', `<div class="scroll"><table><tr><th>Loại</th><th>Đang giữ</th><th class="n">Vốn</th><th class="n">Giá trị hôm nay</th><th class="n">Lời tạm tính</th><th class="n">Lời đã chốt</th></tr>${typeRows}</table></div>`);
+  const prices = D.vang.gia.map((p, i) => ({ p, i })).sort((a, b) => b.p.ngay.localeCompare(a.p.ngay));
+  html += card('Lịch sử giá', prices.length ? `<div class="scroll"><table><tr><th>Ngày</th><th>Loại</th><th class="n">Tiệm mua vào</th><th class="n">Tiệm bán ra</th><th class="n">Chênh lệch</th><th></th></tr>
+    ${prices.map(({ p, i }) => `<tr><td>${fmtD(p.ngay)}</td><td>${esc(typeById(p.loai_id)?.ten)}</td><td class="n">${fmtM(p.mua_vao)}</td><td class="n">${p.ban_ra ? fmtM(p.ban_ra) : '—'}</td>
+      <td class="n">${p.ban_ra ? fmtP(1 - p.mua_vao / p.ban_ra, false) : '—'}</td><td><button class="sm danger" data-act="price-del" data-i="${i}">Xóa</button></td></tr>`).join('')}</table></div>` : '<p class="muted">Chưa nhập giá lần nào.</p>');
+  return html;
+}
+
+// ===================== Tab: Tham số =====================
+function viewThamSo() {
+  const T = D.tham_so;
+  const f = (k, label, step = '0.1') => `<label class="field"><span>${label}</span><input type="number" step="${step}" data-set="${k}" value="${T[k]}"></label>`;
+  const used = id => D.vang.lo.some(l => l.loai_id === id) || D.vang.gia.some(p => p.loai_id === id);
+  return card('Tham số chung', `<div class="row">${f('lai_suat_ngan_hang', 'Lãi suất ngân hàng tham chiếu (%/năm)')}${f('lam_phat', 'Lạm phát (%/năm)')}
+      ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', '% sắp đạt mặc định cho lô mới')}</div>
+    <p class="muted small">So sánh với ngân hàng dùng lãi đơn và lãi suất hiện tại cho toàn bộ thời gian giữ, nên chỉ mang tính tham khảo với lô giữ lâu.</p>`) +
+    card('Loại vàng', `<table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
+      ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"></td>
+        <td><select data-type-unit="${esc(t.id)}" ${used(t.id) ? 'disabled title="Loại đã có lô hoặc giá, không đổi đơn vị được"' : ''}>
+          ${['luong', 'chi'].map(u => `<option value="${u}" ${t.don_vi_niem_yet === u ? 'selected' : ''}>${UNIT_NAME[u]}</option>`).join('')}</select></td>
+        <td><button class="sm danger" data-act="type-del" data-id="${esc(t.id)}" ${D.vang.lo.some(l => l.loai_id === t.id) ? 'disabled title="Loại đã có lô, không xóa được"' : ''}>Xóa</button></td></tr>`).join('')}</table>
+      <form id="typeForm"><div class="row" style="margin-top:10px"><label class="field"><span>Tên loại mới</span><input name="ten" required placeholder="VD: Nhẫn 9999"></label>
+        <label class="field"><span>Đơn vị niêm yết</span><select name="dv"><option value="chi">chỉ</option><option value="luong">lượng</option></select></label>
+        <button type="submit">+ Thêm loại</button></div></form>`);
+}
+
+// ===================== Hộp thoại =====================
+const dlg = $('#dlg');
+let dlgSubmit = null;
+function openDlg(html, onSubmit, onInput) {
+  dlg.innerHTML = `<form id="dlgForm" novalidate>${html}</form>`;
+  dlgSubmit = onSubmit;
+  const f = $('#dlgForm');
+  if (onInput) { f.addEventListener('input', e => onInput(f, e)); onInput(f, {}); }
+  dlg.showModal();
+}
+dlg.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.submitter && e.submitter.value === 'cancel') return dlg.close();
+  if (dlgSubmit && dlgSubmit($('#dlgForm')) !== false) dlg.close();
+});
+
+function wInputs(prefix, dem) {
+  const o = splitW(dem);
+  return UNITS.map(([k, , n]) => `<label class="field"><span>${n}</span><input class="w" type="number" min="0" name="${prefix}_${k}" value="${o[k] || ''}"></label>`).join('');
+}
+const readW = (f, prefix) => UNITS.reduce((a, [k, v]) => a + Math.max(0, Math.floor(parseN(f[prefix + '_' + k].value))) * v, 0);
+
+function dlgLot(lot) {
+  const isEdit = !!lot;
+  const T = D.tham_so;
+  lot = lot || { ngay_mua: today(), loai_id: D.vang.loai[0]?.id || '__new', so_mon: 1, trong_luong_mon_dem: 1000, tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' };
+  let last = 'tong';
+  openDlg(`<h2>${isEdit ? 'Sửa lô ' + esc(lot.id) : 'Thêm lô vàng'}</h2>
+    <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" required></label>
+      <label class="field"><span>Loại vàng</span><select name="loai">${typeOptions(lot.loai_id)}<option value="__new" ${lot.loai_id === '__new' ? 'selected' : ''}>➕ Loại mới…</option></select></label></div>
+    <div class="row" id="newType"><label class="field"><span>Tên loại mới</span><input name="ten_moi" placeholder="VD: SJC miếng"></label>
+      <label class="field"><span>Đơn vị niêm yết giá</span><select name="dv_moi"><option value="luong">lượng</option><option value="chi">chỉ</option></select></label></div>
+    <div class="row"><label class="field"><span>Số món</span><input type="number" min="1" name="so_mon" value="${lot.so_mon}" style="width:70px"></label>
+      <span style="padding-bottom:6px">×</span> ${wInputs('w', lot.trong_luong_mon_dem)}</div>
+    <p class="small muted" id="wInfo"></p>
+    <div class="row"><label class="field"><span id="dgLabel">Đơn giá</span><input class="money" name="don_gia"></label>
+      <label class="field"><span>Tổng tiền mua</span><input class="money" name="tong" value="${digits(lot.tong_tien_mua) || ''}"></label></div>
+    <div class="row"><label class="field"><span>% kỳ vọng</span><input type="number" step="0.1" name="kv" value="${lot.ky_vong_pct}"></label>
+      <label class="field"><span>% sắp đạt</span><input type="number" step="0.1" name="sd" value="${lot.sap_dat_pct}"></label></div>
+    <label class="field"><span>Ghi chú</span><input name="ghi_chu" value="${esc(lot.ghi_chu)}" placeholder="Nơi mua, số seri…"></label>
+    <div class="dlg-actions"><button value="cancel" type="submit" formnovalidate>Hủy</button><button class="primary" type="submit">Lưu</button></div>`,
+    f => {
+      const n = Math.floor(parseN(f.so_mon.value)), wd = readW(f, 'w'), tong = parseM(f.tong.value);
+      let loai = f.loai.value;
+      if (!f.ngay.value) return alert('Chưa nhập ngày mua.'), false;
+      if (n < 1) return alert('Số món phải từ 1 trở lên.'), false;
+      if (wd < 1) return alert('Chưa nhập trọng lượng mỗi món.'), false;
+      if (tong <= 0) return alert('Chưa nhập giá mua.'), false;
+      if (loai === '__new' && !f.ten_moi.value.trim()) return alert('Chưa nhập tên loại vàng mới.'), false;
+      if (isEdit && n < soldMon(lot.id)) return alert('Lô đã bán ' + soldMon(lot.id) + ' món, số món không được nhỏ hơn.'), false;
+      if (isEdit && D.vang.ban.some(b => b.lo_id === lot.id && b.ngay < f.ngay.value)) return alert('Ngày mua không được sau ngày của các lần bán.'), false;
+      if (loai === '__new') {
+        loai = 't' + Date.now().toString(36);
+        D.vang.loai.push({ id: loai, ten: f.ten_moi.value.trim(), don_vi_niem_yet: f.dv_moi.value });
+      }
+      const data = { loai_id: loai, ngay_mua: f.ngay.value, so_mon: n, trong_luong_mon_dem: wd, tong_tien_mua: tong, ky_vong_pct: parseN(f.kv.value), sap_dat_pct: parseN(f.sd.value), ghi_chu: f.ghi_chu.value.trim() };
+      if (isEdit) Object.assign(lotById(lot.id), data);
+      else {
+        const y = data.ngay_mua.slice(0, 4), seq = (D.vang.so_thu_tu.lo[y] || 0) + 1;
+        D.vang.so_thu_tu.lo[y] = seq;
+        D.vang.lo.push(Object.assign({ id: `V-${y}-${String(seq).padStart(3, '0')}` }, data));
+      }
+      commit();
+    },
+    (f, e) => {
+      const isNew = f.loai.value === '__new';
+      $('#newType').classList.toggle('hidden', !isNew);
+      const unit = isNew ? f.dv_moi.value : typeById(f.loai.value)?.don_vi_niem_yet || 'chi';
+      const n = Math.floor(parseN(f.so_mon.value)), wd = readW(f, 'w'), qty = n * wd / UNIT_DEM[unit];
+      $('#dgLabel').textContent = 'Đơn giá (mỗi ' + UNIT_NAME[unit] + ')';
+      $('#wInfo').textContent = n > 0 && wd > 0 ? `Tổng: ${fmtW(n * wd)} = ${qty.toLocaleString('vi-VN', { maximumFractionDigits: 4 })} ${UNIT_NAME[unit]}` : '';
+      const tgt = e.target && e.target.name;
+      if (tgt === 'don_gia') last = 'dg'; else if (tgt === 'tong') last = 'tong';
+      if (!qty) return;
+      if (last === 'dg') f.tong.value = digits(parseM(f.don_gia.value) * qty);
+      else if (tgt !== 'don_gia') f.don_gia.value = parseM(f.tong.value) ? digits(parseM(f.tong.value) / qty) : '';
+    });
+}
+
+function dlgSale(lotId, preset) {
+  const lot = lotById(lotId), s = lotState(lot), t = s.t;
+  if (s.n <= 0) return;
+  const k0 = preset && s.hasPrice ? sellK[preset](s) : 1;
+  const unit = UNIT_NAME[t.don_vi_niem_yet];
+  openDlg(`<h2>Bán lô ${esc(lot.id)} · ${esc(t.ten)}</h2>
+    <p class="muted">Còn ${s.n} món × ${fmtW(lot.trong_luong_mon_dem)} · vốn còn lại ${fmtM(s.V)} · mua ngày ${fmtD(lot.ngay_mua)}</p>
+    <div class="row"><label class="field"><span>Ngày bán</span><input type="date" name="ngay" value="${today()}" required></label>
+      <label class="field"><span>Số món bán (tối đa ${s.n})</span><input type="number" min="1" max="${s.n}" name="k" value="${k0}" style="width:80px"></label>
+      <label class="field"><span>Giá bán (mỗi ${unit})</span><input class="money" name="gia" value="${s.hasPrice ? digits(s.P) : ''}"></label></div>
+    <div class="row"><button type="button" class="sm" data-fill="het">Bán hết</button><button type="button" class="sm" data-fill="von">Bán lấy lại vốn</button><button type="button" class="sm" data-fill="nua">Bán một nửa</button></div>
+    <div class="row"><label class="field"><span>Giá muốn mua lại (mỗi ${unit}, tùy chọn)</span><input class="money" name="mua_lai"></label>
+      <label class="field" style="flex:1"><span>Ghi chú</span><input name="ghi_chu"></label></div>
+    <div class="preview" id="salePreview"></div>
+    <div class="dlg-actions"><button value="cancel" type="submit">Hủy</button><button class="primary" type="submit">Xác nhận bán</button></div>`,
+    f => {
+      const k = Math.floor(parseN(f.k.value)), gia = parseM(f.gia.value);
+      if (!f.ngay.value) return alert('Chưa nhập ngày bán.'), false;
+      if (f.ngay.value < lot.ngay_mua) return alert('Ngày bán không được trước ngày mua.'), false;
+      if (k < 1 || k > s.n) return alert('Số món bán phải từ 1 đến ' + s.n + '.'), false;
+      if (gia <= 0) return alert('Chưa nhập giá bán.'), false;
+      D.vang.so_thu_tu.ban += 1;
+      D.vang.ban.push({ id: 'B-' + String(D.vang.so_thu_tu.ban).padStart(4, '0'), lo_id: lot.id, ngay: f.ngay.value, so_mon: k, gia_ban: gia, gia_mua_lai: parseM(f.mua_lai.value) || null, ghi_chu: f.ghi_chu.value.trim() });
+      commit();
+    },
+    f => {
+      const k = Math.floor(parseN(f.k.value)), gia = parseM(f.gia.value);
+      const c = saleCalc({ lo_id: lot.id, ngay: f.ngay.value || today(), so_mon: k, gia_ban: gia });
+      $('#salePreview').innerHTML = k >= 1 && k <= s.n && gia > 0 ? `<table>
+        <tr><td>Tiền thu về</td><td class="n"><b>${fmtM(c.thu)}</b></td></tr>
+        <tr><td>Vốn của phần bán</td><td class="n">${fmtM(c.von)}</td></tr>
+        <tr><td>Lời/lỗ chốt</td><td class="n ${cls(c.loi)}"><b>${fmtMS(c.loi)} (${fmtP(c.g)})</b></td></tr>
+        <tr><td>Nếu số vốn này gửi ngân hàng (${c.d} ngày)</td><td class="n">${fmtM(c.bank)} → <span class="${cls(c.vsBank)}">${c.vsBank >= 0 ? 'vàng hơn' : 'vàng thua'} ${fmtM(Math.abs(c.vsBank))}</span></td></tr>
+        <tr><td>Lô còn lại sau khi bán</td><td class="n">${s.n - k} món${s.n - k > 0 ? ' · ' + fmtW((s.n - k) * lot.trong_luong_mon_dem) + ' · vốn ' + fmtM(s.V - c.von) : ' · lô sẽ đóng'}</td></tr></table>`
+        : '<span class="muted">Nhập số món và giá bán để xem trước.</span>';
+    });
+  $('#dlgForm').addEventListener('click', e => {
+    const b = e.target.closest('[data-fill]'); if (!b) return;
+    const f = $('#dlgForm'), gia = parseM(f.gia.value);
+    const st = Object.assign({}, s, { valMon: s.w * (gia || s.P || 0) });
+    if (b.dataset.fill === 'von' && !st.valMon) return alert('Nhập giá bán trước.');
+    f.k.value = sellK[b.dataset.fill](st);
+    f.dispatchEvent(new Event('input'));
+  });
+}
+
+// ===================== Sự kiện =====================
+const act = {
+  tab: d => { tab = d.k; render(); window.scrollTo(0, 0); },
+  'lot-add': () => dlgLot(null),
+  'lot-edit': d => dlgLot(lotById(d.id)),
+  'lot-del': d => { if (confirm('Xóa lô ' + d.id + '?')) { D.vang.lo = D.vang.lo.filter(l => l.id !== d.id); commit(); } },
+  'lot-detail': d => { ui.loOpen = ui.loOpen === d.id ? null : d.id; render(); },
+  sell: d => dlgSale(d.id, d.k),
+  'sale-undo': d => { if (confirm('Hoàn tác lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); ui.plans = null; commit(); } },
+  'rebuy-clear': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) { b.gia_mua_lai = null; commit(); } },
+  'price-del': d => { if (confirm('Xóa dòng giá này?')) { D.vang.gia.splice(+d.i, 1); commit(); } },
+  'type-del': d => { if (confirm('Xóa loại vàng này cùng lịch sử giá của nó?')) { D.vang.loai = D.vang.loai.filter(t => t.id !== d.id); D.vang.gia = D.vang.gia.filter(p => p.loai_id !== d.id); commit(); } },
+  'plan-confirm': d => {
+    const p = ui.plans[+d.plan], rows = p.rows.filter(x => x.k > 0);
+    const S = planSummary({ rows }, ui.cash);
+    if (!confirm(`Xác nhận bán theo ${p.name}?\n\n` + S.rows.map(x => `${x.s.lot.id}: ${x.r.k} món → ${fmtM(x.t)}`).join('\n') + `\n\nTổng thu: ${fmtM(S.thu)} · Lời/lỗ: ${fmtMS(S.loi)}`)) return;
+    for (const x of S.rows) {
+      D.vang.so_thu_tu.ban += 1;
+      D.vang.ban.push({ id: 'B-' + String(D.vang.so_thu_tu.ban).padStart(4, '0'), lo_id: x.s.lot.id, ngay: today(), so_mon: x.r.k, gia_ban: x.s.P, gia_mua_lai: null, ghi_chu: 'Cần tiền ' + fmtM(ui.cash) });
+    }
+    ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit();
+  },
+  'export-json': () => download(`tai-san-${today()}.json`, JSON.stringify(D, null, 2), 'application/json'),
+  'import-json': () => $('#importFile').click(),
+  'export-csv': exportCsv,
+  'file-open': async () => { try { const [h] = await showOpenFilePicker({ types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, false); } catch (e) { if (e.name !== 'AbortError') alert(e.message); } },
+  'file-new': async () => { try { const h = await showSaveFilePicker({ suggestedName: 'tai-san.json', types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, true); } catch (e) { if (e.name !== 'AbortError') alert(e.message); } },
+  'file-reconnect': async () => {
+    try { const h = await idbGet('file'); if (h && await h.requestPermission({ mode: 'readwrite' }) === 'granted') await useFile(h, false); }
+    catch (e) { alert('Không mở lại được file: ' + e.message); }
+  }
+};
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) act[b.dataset.act](b.dataset, b); });
+document.addEventListener('focusout', e => { if (e.target.matches('input.money')) { const v = parseM(e.target.value); e.target.value = v ? digits(v) : ''; } });
+document.addEventListener('submit', e => {
+  const f = e.target;
+  if (f.id === 'priceForm') {
+    e.preventDefault();
+    const ngay = f.ngay.value; if (!ngay) return alert('Chưa nhập ngày.');
+    let n = 0;
+    for (const t of D.vang.loai) {
+      const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
+      if (!mv) continue;
+      if (br && br < mv) { alert(`${t.ten}: giá tiệm bán ra thấp hơn giá mua vào, kiểm tra lại.`); return; }
+      D.vang.gia = D.vang.gia.filter(p => !(p.ngay === ngay && p.loai_id === t.id));
+      D.vang.gia.push({ ngay, loai_id: t.id, mua_vao: mv, ban_ra: br || null }); n++;
+    }
+    if (!n) return alert('Chưa nhập giá nào.');
+    commit();
+  } else if (f.id === 'cashForm') {
+    e.preventDefault();
+    ui.cash = parseM(f.x.value); ui.plans = ui.cash > 0 ? cashPlans(ui.cash) : null; render();
+  } else if (f.id === 'typeForm') {
+    e.preventDefault();
+    D.vang.loai.push({ id: 't' + Date.now().toString(36), ten: f.ten.value.trim(), don_vi_niem_yet: f.dv.value }); commit();
+  }
+});
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.id === 'loStatus') { ui.loStatus = el.value; render(); }
+  else if (el.id === 'loType') { ui.loType = el.value; render(); }
+  else if (el.id === 'lsYear') { ui.lsYear = el.value; render(); }
+  else if (el.dataset.set) { D.tham_so[el.dataset.set] = parseN(el.value); commit(); }
+  else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit(); } }
+  else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit(); } }
+  else if (el.dataset.plan != null && el.dataset.row != null) {
+    ui.plans[+el.dataset.plan].rows[+el.dataset.row].k = Math.max(0, Math.floor(parseN(el.value))); render();
+  } else if (el.id === 'importFile') {
+    const file = el.files[0]; el.value = ''; if (!file) return;
+    file.text().then(text => {
+      let F; try { F = JSON.parse(text); } catch { return alert('File không phải JSON hợp lệ.'); }
+      if (!F || !F.vang) return alert('File không đúng định dạng dữ liệu của app.');
+      if (!confirm('Dữ liệu trong file sẽ THAY THẾ toàn bộ dữ liệu đang mở. Tiếp tục?')) return;
+      D = normalize(F); ui.plans = null; commit();
+    });
+  }
+});
+
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exportCsv() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const line = a => a.map(q).join(',');
+  const lots = [line(['Mã lô', 'Loại', 'Ngày mua', 'Số món', 'Trọng lượng mỗi món', 'Trọng lượng mỗi món (dem)', 'Tổng tiền mua', 'Còn lại (món)', 'Vốn còn lại', 'Giá trị hôm nay', 'Lời tạm tính', '% lời', '% kỳ vọng', 'Ghi chú'])]
+    .concat(D.vang.lo.map(l => { const s = lotState(l); return line([l.id, s.t?.ten, l.ngay_mua, l.so_mon, fmtW(l.trong_luong_mon_dem), l.trong_luong_mon_dem, l.tong_tien_mua, s.n, Math.round(s.V), s.hasPrice ? Math.round(s.G) : '', s.hasPrice ? Math.round(s.L) : '', s.hasPrice ? (s.g * 100).toFixed(2) : '', l.ky_vong_pct, l.ghi_chu]); }));
+  const sales = [line(['Mã', 'Ngày', 'Lô', 'Loại', 'Số món', 'Giá bán', 'Tiền thu', 'Vốn', 'Lời/lỗ', '% lời', 'Giá muốn mua lại', 'Ghi chú'])]
+    .concat(D.vang.ban.map(b => { const c = saleCalc(b); return line([b.id, b.ngay, b.lo_id, typeById(c?.lot.loai_id)?.ten, b.so_mon, b.gia_ban, Math.round(c?.thu), Math.round(c?.von), Math.round(c?.loi), c ? (c.g * 100).toFixed(2) : '', b.gia_mua_lai || '', b.ghi_chu]); }));
+  download(`vang-lo-${today()}.csv`, '﻿' + lots.join('\r\n'), 'text/csv');
+  setTimeout(() => download(`vang-ban-${today()}.csv`, '﻿' + sales.join('\r\n'), 'text/csv'), 300);
+}
+
+// ===================== Khởi động =====================
+(async () => {
+  if (!hasFSA) document.querySelectorAll('.fsa').forEach(b => b.classList.add('hidden'));
+  render(); persistStatus();
+  if (hasFSA) {
+    try {
+      const h = await idbGet('file');
+      if (h) {
+        if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') await useFile(h, false);
+        else { const b = $('#btnReconnect'); b.textContent = '📂 Mở lại ' + h.name; b.classList.remove('hidden'); b.classList.add('primary'); }
+      }
+    } catch { }
+  }
+})();
+function persistStatus() { setStatus(hasFSA ? 'Đang lưu trong trình duyệt — nên chọn file dữ liệu' : 'Đang lưu trong trình duyệt — nhớ Xuất JSON để sao lưu', !!hasFSA); }
+</script>
+</body>
+</html>
