@@ -301,7 +301,7 @@ function persist() {
     }
   });
 }
-// Quay lại tab hoặc cửa sổ: nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
+// Quay lại tab hoặc cửa sổ (và mỗi phút): nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
 function checkOnReturn() {
   if (document.visibilityState !== 'visible' || VIEW || booting || (!fileHandle && pendingHandle)) return;
   saveChain = saveChain.then(async () => {
@@ -1441,6 +1441,8 @@ const act = {
           const { mod, cap } = await fileSeen(h); await useFile(h, true, { mod, cap });
           return setNotice(`Đây là file đang dùng (<b>${esc(h.name)}</b>); dữ liệu đang mở đã được ghi lại vào đó.`);
         }
+        // File đang nhớ đã mất (không tìm thấy): chọn đúng chỗ cũ là tạo lại file, không có gì bị xóa trắng
+        if (ui.gateLost) { await useFile(h, true); return setNotice(`Đã tạo lại <b>${esc(h.name)}</b> từ bản trong trình duyệt.`); }
         // Ở màn chờ: nội dung file đã bị xóa trắng, chưa ghi gì vào; chỉ cách lấy lại
         Object.assign(ui, { gateError: `Bạn vừa chọn lại đúng file ${h.name} trong hộp Lưu. Chrome xóa trắng file được chọn ở hộp này nên file đang rỗng.`, gateBad: true, gateLost: false, gateEmpty: false });
         return render();
@@ -1507,7 +1509,9 @@ document.addEventListener('input', e => {
 const onReturn = () => { tickDay(); checkOnReturn(); };
 document.addEventListener('visibilitychange', onReturn);
 window.addEventListener('focus', onReturn);
-setInterval(tickDay, 60000);   // tab hiện suốt qua nửa đêm, hay máy vừa thức dậy, cũng kịp sang ngày mới
+// Mỗi phút: tab hiện suốt qua nửa đêm, hay máy vừa thức dậy, cũng kịp sang ngày mới; cửa sổ để mở sẵn cũng thấy thay đổi ở máy khác.
+// Đang mở hộp thoại hoặc đang gõ trong một ô thì chưa kiểm tra file (nạp lại sẽ đóng hộp thoại, xóa số đang gõ); trước khi lưu vẫn kiểm tra
+setInterval(() => { tickDay(); if (!dlg.open && !document.activeElement?.matches('input, select, textarea')) checkOnReturn(); }, 60000);
 // Phần thu gọn: mở ra mới vẽ (vẽ sẵn rồi thì thôi), đóng lại thì bỏ nội dung.
 // Bấm vào tiêu đề thì vẽ ngay lúc bấm (sự kiện toggle đến sau, có thể kịp hiện một khung trống)
 const fillLazy = d => { const body = d.querySelector('.lazy-body'); if (!body.childElementCount) body.innerHTML = LAZY[d.dataset.lazy].html(); };
