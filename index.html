@@ -594,6 +594,22 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
 const ui = { gateError: '', priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+// "Hôm nay" mà bảng giá đang hiển thị: để tab mở qua đêm thì today() đã sang ngày mới mà bảng vẫn là ngày cũ
+let shownDay = today();
+// Sang ngày mới: ô Ngày đang là hôm nay cũ thì chuyển sang hôm nay (đang nhập bù một ngày khác thì giữ). Trả về ngày cũ nếu vừa sang ngày
+function rollDay() {
+  const t = today(); if (t === shownDay) return null;
+  const old = shownDay; shownDay = t;
+  if (ui.priceDate === old) ui.priceDate = t;
+  const f = $('#priceForm'); if (f && f.ngay.value === old) f.ngay.value = ui.priceDate;
+  return old;
+}
+// Quay lại tab và mỗi phút: sang ngày mới thì vẽ lại (bảng giá giữ nguyên dòng đang gõ)
+function tickDay() { if (rollDay()) { _cache = null; tab === 'homnay' && $('#priceForm') ? softRender() : render(); } }
+const newDayNote = () => `Đã sang ngày ${fmtD(today()).slice(0, 5)}, giá vừa nhập lưu cho hôm nay. Muốn lưu cho ngày cũ thì bấm Hoàn tác rồi chọn lại ngày.`;
+const noticeHtml = () => ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '';
+// Đổi dòng báo đầu trang mà không vẽ lại cả trang (giữ ô đang gõ)
+function setNotice(html) { ui.notice = html; const s = $('#noticeSlot'); if (s) s.innerHTML = noticeHtml(); }
 function render() {
   document.body.classList.toggle('view', VIEW);
   if (VIEW && !ui.viewLoaded) { $('#tabs').innerHTML = ''; $('#app').innerHTML = viewGate(); return; }
@@ -606,7 +622,7 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-k="${k}">${n}</button>`).join('');
   const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
   _cache = null;
-  $('#app').innerHTML = (VIEW ? `<div class="note" id="viewNote">${viewNote()}</div>` : '') + (ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '') + fileBanner() + v();
+  $('#app').innerHTML = (VIEW ? `<div class="note" id="viewNote">${viewNote()}</div>` : '') + `<div id="noticeSlot">${noticeHtml()}</div>` + fileBanner() + v();
   updateUndoBtn();
 }
 function updateUndoBtn() { const u = undoStack.at(-1), bu = $('#btnUndo'); bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label; }
@@ -626,6 +642,7 @@ function flushSoft() {
     const tr = f.querySelector(`tr.prow[data-id="${t.id}"]`), a = document.activeElement;
     if (tr && !(tr.contains(a) && a.matches('input.money'))) tr.outerHTML = priceRow(t);
   }
+  f.ngay.max = today(); f.ngay.classList.toggle('olddate', ui.priceDate !== today()); $('#dateNote').innerHTML = dateNote();
   $('#btnAllSame')?.classList.toggle('hidden', !staleIds().length);
   rest.innerHTML = homRest();
   if (VIEW) $('#viewNote').innerHTML = viewNote();
@@ -707,6 +724,7 @@ function resetRow(f, id) {
 }
 function saveRow(id) {
   const f = $('#priceForm'); if (!f || !f['mv_' + id]) return;
+  const rolled = rollDay(); if (rolled) softRender();   // tab để mở qua đêm: giá vừa gõ là giá của hôm nay mới
   const t = typeById(id), ngay = f.ngay.value, base = basePrice(id, validDate(ngay) ? ngay : ui.priceDate);
   const mv = parseM(f['mv_' + id].value), br = parseM(f['br_' + id].value) || null;
   if (!mv) return resetRow(f, id);
@@ -720,14 +738,18 @@ function saveRow(id) {
   setPrice({ ngay, loai_id: id, mua_vao: mv, ban_ra: br });
   if (VIEW) ui.viewTemp = true;
   commit(`giá ${t.ten} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
+  if (rolled && ngay === today()) setNotice(newDayNote());
 }
-// Tick Không đổi / Tất cả không đổi: ghi nhận giá điền sẵn cho ngày đang chọn
+// Tick Không đổi / Tất cả không đổi (ids trống = mọi dòng chưa có giá): ghi nhận giá điền sẵn cho ngày đang chọn
 function markSame(ids) {
+  const rolled = rollDay(); if (rolled) softRender();
+  ids ||= staleIds();
   const v = $('#priceForm')?.ngay.value, ngay = validDate(v) ? v : ui.priceDate, rows = [];
   for (const id of ids) { const b = basePrice(id, ngay); if (b && b.ngay < ngay) rows.push({ ngay, loai_id: id, mua_vao: b.mua_vao, ban_ra: b.ban_ra }); }
   if (!rows.length) return;
   rows.forEach(setPrice); if (VIEW) ui.viewTemp = true;
   commit(rows.length > 1 ? `giá không đổi ngày ${fmtD(ngay).slice(0, 5)}` : `giá ${typeById(rows[0].loai_id).ten} không đổi ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
+  if (rolled && ngay === today()) setNotice(newDayNote());
 }
 function homRest() {
   let html = '';
@@ -1235,11 +1257,11 @@ const act = {
     ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit(`bán theo phương án ${p.name.slice(0, 1)} (${S.rows.length} lô)`);
   },
   undo: () => undo(),
-  'all-same': () => markSame(staleIds()),
+  'all-same': () => markSame(),
   'price-today': () => { ui.priceDate = today(); const f = $('#priceForm'); f.ngay.value = ui.priceDate; applyPriceDate(f); },
   'view-open': () => { ui.importMode = 'view'; $('#importFile').click(); },
   'view-old': () => download(`du-lieu-cu-trong-trinh-duyet-${today()}.json`, oldLocal, 'application/json'),
-  'notice-close': () => { ui.notice = ''; render(); },
+  'notice-close': () => setNotice(''),
   'export-json': () => download(`sao-luu-vang-${today()}.json`, JSON.stringify(D, null, 2), 'application/json'),
   'import-json': () => $('#importFile').click(),
   'file-open': async () => { let h; try { [h] = await showOpenFilePicker({ types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, false); } catch (e) { fileError(e, h); } },
@@ -1278,8 +1300,10 @@ document.addEventListener('input', e => {
   }
   refreshBuy(f);
 });
-document.addEventListener('visibilitychange', checkOnReturn);
-window.addEventListener('focus', checkOnReturn);
+const onReturn = () => { tickDay(); checkOnReturn(); };
+document.addEventListener('visibilitychange', onReturn);
+window.addEventListener('focus', onReturn);
+setInterval(tickDay, 60000);   // tab hiện suốt qua nửa đêm, hay máy vừa thức dậy, cũng kịp sang ngày mới
 // Phần thu gọn: mở ra mới vẽ (vẽ sẵn rồi thì thôi), đóng lại thì bỏ nội dung.
 // Bấm vào tiêu đề thì vẽ ngay lúc bấm (sự kiện toggle đến sau, có thể kịp hiện một khung trống)
 const fillLazy = d => { const body = d.querySelector('.lazy-body'); if (!body.childElementCount) body.innerHTML = LAZY[d.dataset.lazy].html(); };
