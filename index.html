@@ -206,6 +206,7 @@ function normalize(d) {
   return d;
 }
 const hasFSA = 'showOpenFilePicker' in window;
+const JSON_TYPES = [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }];
 // Trình duyệt không ghi thẳng vào file được (điện thoại, Safari, Firefox): chế độ xem, không lưu gì,
 // để không sinh bộ dữ liệu thứ hai lệch với file trên máy tính
 const VIEW = !hasFSA;
@@ -224,7 +225,8 @@ const setMark = v => { try { localStorage.setItem(SYNC_KEY, v); } catch { } };
 // thời điểm sửa file và cap_nhat. Dùng để biết nơi lưu có bị tab/máy khác sửa không.
 let seen = { mod: null, cap: (() => { try { return localStorage.getItem(CAP_KEY) ?? ''; } catch { return ''; } })() };
 let gen = 0;   // tăng mỗi khi nạp dữ liệu từ nơi khác: các lần lưu xếp hàng từ trước đó bỏ đi
-const backupName = () => { const n = new Date(); return `ban-trinh-duyet-${today()}-${String(n.getHours()).padStart(2, '0')}h${String(n.getMinutes()).padStart(2, '0')}.json`; };
+const stamp = () => { const n = new Date(); return `${today()}-${String(n.getHours()).padStart(2, '0')}h${String(n.getMinutes()).padStart(2, '0')}`; };
+const backupName = () => `ban-trinh-duyet-${stamp()}.json`;
 // Nơi lưu (file, hoặc bản trong trình duyệt khi chưa kết nối file) có bị sửa ở nơi khác kể từ lần tab này đọc/ghi cuối không.
 // Xem thời điểm sửa của file trước, khác mới đọc file để so cap_nhat (OneDrive chỉ chạm vào file thì không tính).
 async function storeChanged() {
@@ -335,39 +337,64 @@ function idb(mode, fn) {
 const idbGet = k => idb('readonly', s => s.get(k));
 const idbSet = (k, v) => idb('readwrite', s => s.put(v, k));
 
-async function useFile(handle, fromNew) {
+const hasData = x => x.vang.lo.length + x.vang.gia.length + x.vang.ban.length > 0;
+// File không dùng được (rỗng, hỏng, không phải dữ liệu của app): màn chờ chỉ cách lấy lại, không tự ghi gì vào file
+const badFile = msg => Object.assign(new Error(msg), { bad: true });
+// Đọc dữ liệu của app từ một file (bản sao lưu hoặc file dữ liệu); lỗi thì ném badFile
+async function readData(h) {
+  const text = await (await h.getFile()).text();
+  if (!text.trim()) throw badFile(`File ${h.name} đang rỗng (0 byte), có thể vừa bị xóa trắng.`);
+  let raw; try { raw = JSON.parse(text); } catch { throw badFile(`File ${h.name} không phải dữ liệu JSON hợp lệ (có thể đã bị hỏng).`); }
+  if (!raw || typeof raw !== 'object' || typeof raw.vang !== 'object') throw badFile(`File ${h.name} không phải dữ liệu của app quản lý vàng.`);
+  return normalize(raw);
+}
+// seenAs: dấu của nội dung đang nằm trong file khi ghi đè có chủ ý (khôi phục, ghi lại vào chính file đang dùng)
+async function useFile(handle, fromNew, seenAs) {
   let mod = null, fileCap = '';
   if (!fromNew) {
-    const fi = await handle.getFile(), text = await fi.text(); mod = fi.lastModified;
-    let F = null;
-    if (text.trim()) {
-      let raw; try { raw = JSON.parse(text); } catch { throw new Error(`File ${handle.name} không phải dữ liệu JSON hợp lệ (có thể đã bị hỏng). Chọn file khác, hoặc tạo file mới rồi khôi phục từ bản sao lưu.`); }
-      if (!raw || typeof raw !== 'object' || typeof raw.vang !== 'object') throw new Error(`File ${handle.name} không phải dữ liệu của app quản lý vàng. Chọn file khác.`);
-      F = normalize(raw);
-    }
-    if (F) {
-      fileCap = F.cap_nhat || '';
-      // Đối chiếu với mốc đồng bộ, không hỏi OK/Hủy:
-      // trình duyệt không có thay đổi mới → dùng file; có thay đổi mà file không đổi → ghi bản trình duyệt vào file;
-      // cả hai cùng đổi → dùng file, bản trình duyệt tự tải về để không mất
-      const mark = getMark(), body = x => JSON.stringify(Object.assign({}, x, { cap_nhat: '' }));
-      const hasData = x => x.vang.lo.length + x.vang.gia.length + x.vang.ban.length > 0;
-      const localDirty = hasData(D) && (D.cap_nhat || '') !== mark && body(D) !== body(F);
-      const fileChanged = (F.cap_nhat || '') !== mark;
-      if (!localDirty || fileChanged) {
-        if (localDirty) {
-          const now = new Date(), name = `ban-trinh-duyet-${today()}-${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}.json`;
-          download(name, JSON.stringify(D, null, 2), 'application/json');
-          ui.notice = `Bản trong trình duyệt khác với file <b>${esc(handle.name)}</b> (file đã được sửa ở nơi khác). App dùng dữ liệu trong file; bản trình duyệt đã tải về thành <b>${name}</b>. Cần lấy lại thì vào Tham số → Khôi phục từ bản sao lưu.`;
-        }
-        D = F;
+    mod = (await handle.getFile()).lastModified;
+    const F = await readData(handle);
+    fileCap = F.cap_nhat || '';
+    // Đối chiếu với mốc đồng bộ, không hỏi OK/Hủy:
+    // trình duyệt không có thay đổi mới → dùng file; có thay đổi mà file không đổi → ghi bản trình duyệt vào file;
+    // cả hai cùng đổi → dùng file, bản trình duyệt tự tải về để không mất
+    const mark = getMark(), body = x => JSON.stringify(Object.assign({}, x, { cap_nhat: '' }));
+    const localDirty = hasData(D) && (D.cap_nhat || '') !== mark && body(D) !== body(F);
+    const fileChanged = (F.cap_nhat || '') !== mark;
+    if (!localDirty || fileChanged) {
+      if (localDirty) {
+        const name = backupName();
+        download(name, JSON.stringify(D, null, 2), 'application/json');
+        ui.notice = `Bản trong trình duyệt khác với file <b>${esc(handle.name)}</b> (file đã được sửa ở nơi khác). App dùng dữ liệu trong file; bản trình duyệt đã tải về thành <b>${name}</b>. Cần lấy lại thì vào Tham số → Khôi phục từ bản sao lưu.`;
       }
+      D = F;
     }
   }
-  gen++; seen = { mod, cap: fileCap }; ui.gateError = '';   // dấu của nội dung đang nằm trong file (kể cả khi giữ bản trình duyệt để ghi vào)
+  gen++; seen = seenAs || { mod, cap: fileCap };   // dấu của nội dung đang nằm trong file (kể cả khi giữ bản trình duyệt để ghi vào)
+  ui.gateError = ''; ui.gateBad = ui.gateLost = false; ui.gateRestore = null;
   fileHandle = handle; pendingHandle = null;
   try { await idbSet('file', handle); } catch { }
   commit('', { noUndo: true });
+}
+// Dấu hiện tại của một file (để ghi đè có chủ ý mà không bị coi là "file đã bị sửa ở nơi khác")
+async function fileSeen(h) {
+  const fi = await h.getFile(), text = await fi.text();
+  let cap = ''; try { cap = JSON.parse(text).cap_nhat || ''; } catch { }
+  return { mod: fi.lastModified, cap, text };
+}
+// Ghi dữ liệu F vào đúng file đang nhớ (file hỏng, rỗng, hoặc khôi phục bản sao lưu) rồi mở như thường.
+// Nội dung cũ của file (nếu còn) tải về trước, để còn gỡ tay nếu cần. Cần quyền ghi file.
+async function writeInto(h, F, what) {
+  const s = await fileSeen(h), old = s.text.trim() ? `tai-san-truoc-khoi-phuc-${stamp()}.json` : '';
+  if (old) download(old, s.text, 'application/json');
+  D = normalize(JSON.parse(JSON.stringify(F))); ui.plans = null;
+  await useFile(h, true, { mod: s.mod, cap: s.cap });
+  setNotice(`${what} đã được ghi vào <b>${esc(h.name)}</b>.${old ? ` Nội dung cũ của file đã tải về thành <b>${old}</b>.` : ''}`);
+}
+// Khôi phục bản sao lưu vào file đang nhớ ở màn chờ: chưa có quyền ghi thì hiện thêm một nút để Chrome hỏi quyền
+async function restoreInto(h, F, name) {
+  if (await h.queryPermission({ mode: 'readwrite' }) === 'granted') return writeInto(h, F, 'Bản sao lưu ' + esc(name));
+  ui.gateRestore = { F, name }; render();
 }
 
 // ===================== Tính toán vàng =====================
@@ -593,7 +620,7 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { gateError: '', priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+const ui = { gateError: '', gateBad: false, gateLost: false, gateRestore: null, priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
 // "Hôm nay" mà bảng giá đang hiển thị: để tab mở qua đêm thì today() đã sang ngày mới mà bảng vẫn là ngày cũ
 let shownDay = today();
 // Sang ngày mới: ô Ngày đang là hôm nay cũ thì chuyển sang hôm nay (đang nhập bù một ngày khác thì giữ). Trả về ngày cũ nếu vừa sang ngày
@@ -657,11 +684,19 @@ function viewGate() {
     <div class="row">${viewDataBtns()}</div>
     ${oldLocal ? '<p class="small muted">Trình duyệt này còn dữ liệu do bản cũ của app lưu. Tải về để không mất, rồi mở bằng Khôi phục từ bản sao lưu trên máy tính.</p>' : ''}`);
 }
+const fmtWhen = iso => { const d = new Date(iso), p = x => String(x).padStart(2, '0'); return iso && !isNaN(d) ? `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}` : ''; };
+// Màn chờ mở file. File đang nhớ hỏng hoặc rỗng (gateBad): chỉ cách lấy lại, không tự ghi gì vào file.
+// Tạo file mới… chỉ hiện khi file cũ không mở được, để khỏi chọn nhầm đúng file cũ (Chrome xóa trắng file chọn ở hộp Lưu)
 function gateView() {
-  const n = esc(pendingHandle.name);
-  return card('📂 Mở dữ liệu', `${ui.gateError ? `<div class="warn">${esc(ui.gateError)}</div>` : ''}<p>Dữ liệu nằm trong file <b>${n}</b>. Mở lại file để xem số liệu mới nhất; bản lưu trong trình duyệt có thể cũ hơn (ví dụ khi vừa sửa trên máy khác).</p>
-    <div class="row"><button class="primary" data-act="file-reconnect" style="font-size:16px;padding:9px 18px">Mở lại ${n}</button>
-      <button data-act="file-open">Mở file khác…</button><button data-act="file-new">Tạo file mới…</button></div>`);
+  const n = esc(pendingHandle.name), when = fmtWhen(D.cap_nhat);
+  const fix = ui.gateRestore
+    ? `<div class="row"><button class="primary" data-act="gate-restore-go">Ghi bản sao lưu ${esc(ui.gateRestore.name)} vào ${n}</button></div>`
+    : ui.gateBad ? `<p>Lấy lại bản trước bằng <b>lịch sử phiên bản</b> của OneDrive/Google Drive (trên web: chuột phải vào file → Lịch sử phiên bản) rồi bấm Mở lại, hoặc:</p>
+      <div class="row"><button data-act="gate-restore">Khôi phục từ bản sao lưu…</button>${hasData(D) ? `<button data-act="gate-local">Dùng bản trong trình duyệt${when ? ` (sửa lần cuối ${when})` : ''}</button>` : ''}</div>` : '';
+  return card('📂 Mở dữ liệu', `${ui.gateError ? `<div class="warn">${esc(ui.gateError)}</div>` : ''}${fix}
+    ${ui.gateBad ? '' : `<p>Dữ liệu nằm trong file <b>${n}</b>. Mở lại file để xem số liệu mới nhất; bản lưu trong trình duyệt có thể cũ hơn (ví dụ khi vừa sửa trên máy khác).</p>`}
+    <div class="row"><button class="${ui.gateBad ? '' : 'primary'}" data-act="file-reconnect" style="font-size:16px;padding:9px 18px">Mở lại ${n}</button>
+      <button data-act="file-open">Mở file khác…</button>${ui.gateBad || ui.gateLost ? '<button data-act="file-new">Tạo file mới…</button>' : ''}</div>`);
 }
 function fileBanner() {
   if (!hasFSA || fileHandle) return '';
@@ -1264,15 +1299,60 @@ const act = {
   'notice-close': () => setNotice(''),
   'export-json': () => download(`sao-luu-vang-${today()}.json`, JSON.stringify(D, null, 2), 'application/json'),
   'import-json': () => $('#importFile').click(),
-  'file-open': async () => { let h; try { [h] = await showOpenFilePicker({ types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] }); await useFile(h, false); } catch (e) { fileError(e, h); } },
-  'file-new': async () => {
+  'file-open': async () => {
     let h;
     try {
-      h = await showSaveFilePicker({ suggestedName: 'tai-san.json', types: [{ description: 'Dữ liệu tài sản', accept: { 'application/json': ['.json'] } }] });
-      // Chọn trúng một file đã có dữ liệu của app (ví dụ chọn lại đúng tai-san.json): coi như mở file đó, không ghi đè
+      [h] = await showOpenFilePicker({ types: JSON_TYPES });
+      // Mở nhầm bản sao lưu (file do app tải về) khi đã có file dữ liệu: hỏi khôi phục vào file dữ liệu thay vì chuyển sang ghi vào bản sao lưu
+      const cur = fileHandle || pendingHandle;
+      if (cur && /^(sao-luu-vang-|ban-trinh-duyet-)/.test(h.name) && !(await h.isSameEntry(cur))) {
+        if (!confirm(`${h.name} là bản sao lưu. Khôi phục nội dung này vào ${cur.name}?\n\n` + (fileHandle ? 'Dữ liệu đang mở sẽ được thay toàn bộ (Hoàn tác được).' : `Nội dung hiện tại của ${cur.name} sẽ được tải về trước.`))) return;
+        const F = await readData(h);
+        if (fileHandle) { D = F; ui.plans = null; return commit('khôi phục từ ' + h.name); }
+        return await restoreInto(pendingHandle, F, h.name);
+      }
+      await useFile(h, false);
+    } catch (e) { fileError(e, h); }
+  },
+  'file-new': async () => {
+    let h;
+    const cur = fileHandle || pendingHandle;
+    try {
+      // Không gợi ý trùng tên file đang dùng: Chrome xóa trắng file được chọn trong hộp Lưu ngay lúc chọn
+      h = await showSaveFilePicker({ suggestedName: !cur ? 'tai-san.json' : cur.name === 'tai-san-moi.json' ? 'tai-san-moi-2.json' : 'tai-san-moi.json', types: JSON_TYPES });
+      if (cur && await h.isSameEntry(cur)) {
+        if (fileHandle) {   // đang mở chính file đó: dữ liệu đang mở là của file, ghi lại vào đó
+          await useFile(h, true, await fileSeen(h));
+          return setNotice(`Đây là file đang dùng (<b>${esc(h.name)}</b>); dữ liệu đang mở đã được ghi lại vào đó.`);
+        }
+        // Ở màn chờ: nội dung file đã bị xóa trắng, chưa ghi gì vào; chỉ cách lấy lại
+        Object.assign(ui, { gateError: `Bạn vừa chọn lại đúng file ${h.name} trong hộp Lưu. Chrome xóa trắng file được chọn ở hộp này nên file đang rỗng.`, gateBad: true, gateLost: false });
+        return render();
+      }
+      // Chọn trúng một file khác đã có dữ liệu (trình duyệt không xóa trắng): coi như mở file đó, không ghi đè
       let existing = false;
       try { const fi = await h.getFile(); if (fi.size > 0) { const raw = JSON.parse(await fi.text()); existing = !!raw && typeof raw.vang === 'object'; } } catch { }
       await useFile(h, !existing);
+    } catch (e) { fileError(e, h); }
+  },
+  // Màn chờ, file đang nhớ hỏng hoặc rỗng: ghi bản trong trình duyệt vào file đó
+  'gate-local': async () => {
+    const h = pendingHandle; if (!h) return;
+    try {
+      if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return fileError(new Error('Chưa được cho phép ghi file ' + h.name + '.'), h);
+      await writeInto(h, D, 'Bản trong trình duyệt');
+    } catch (e) { fileError(e, h); }
+  },
+  // Màn chờ: chọn bản sao lưu rồi ghi vào đúng file đang nhớ
+  'gate-restore': async () => {
+    let b;
+    try { [b] = await showOpenFilePicker({ types: JSON_TYPES }); await restoreInto(pendingHandle, await readData(b), b.name); } catch (e) { fileError(e, b); }
+  },
+  'gate-restore-go': async () => {
+    const r = ui.gateRestore, h = pendingHandle; if (!r || !h) return;
+    try {
+      if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return fileError(new Error('Chưa được cho phép ghi file ' + h.name + '.'), h);
+      await writeInto(h, r.F, 'Bản sao lưu ' + esc(r.name));
     } catch (e) { fileError(e, h); }
   },
   'file-reconnect': async () => {
@@ -1285,7 +1365,7 @@ const act = {
 };
 // Chế độ xem: các thao tác làm thay đổi dữ liệu bị ẩn (CSS body.view) và chặn luôn ở đây
 const EDIT_ACTS = new Set(['lot-add', 'lot-edit', 'lot-del', 'sell', 'hold', 'sale-edit', 'sale-del', 'rebuy', 'rebuy-clear', 'price-del', 'type-del',
-  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect']);
+  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect', 'gate-local', 'gate-restore', 'gate-restore-go']);
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled && !(VIEW && EDIT_ACTS.has(b.dataset.act))) act[b.dataset.act](b.dataset, b); });
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
@@ -1381,8 +1461,12 @@ document.addEventListener('change', e => {
 const fileErrMsg = (e, h) => e.name === 'NotFoundError' ? `Không tìm thấy file ${h ? h.name : ''} (có thể đã bị xóa hoặc chuyển chỗ). Dùng Mở file khác… hoặc Tạo file mới….` : e.message;
 function fileError(e, h) {
   if (e.name === 'AbortError') return;   // bấm Hủy ở hộp chọn file
-  if (!fileHandle && pendingHandle) { ui.gateError = fileErrMsg(e, h); render(); }   // đang ở màn chờ: báo ngay trên màn chờ
-  else alert(fileErrMsg(e, h));
+  if (!fileHandle && pendingHandle) {   // đang ở màn chờ: báo ngay trên màn chờ
+    ui.gateError = fileErrMsg(e, h);
+    // Cách lấy lại (khôi phục, dùng bản trình duyệt, tạo file mới) chỉ hiện khi chính file đang nhớ hỏng, rỗng hoặc mất
+    if (h === pendingHandle) { ui.gateBad = !!e.bad; ui.gateLost = e.name === 'NotFoundError'; ui.gateRestore = null; }
+    render();
+  } else alert(fileErrMsg(e, h));
 }
 function download(name, text, type) {
   const a = document.createElement('a');
@@ -1400,7 +1484,7 @@ function download(name, text, type) {
     if (h) {
       pendingHandle = h;
       try { if (await timeout(h.queryPermission({ mode: 'readwrite' })) === 'granted') { booting = false; await useFile(h, false); return; } }
-      catch (e) { ui.gateError = fileErrMsg(e, h); }   // file hỏng, mất…: về màn chờ, báo lý do, không để trang trắng
+      catch (e) { fileError(e, h); }   // file hỏng, rỗng, mất…: về màn chờ, báo lý do, không để trang trắng
     }
   }
   booting = false; render(); persistStatus();
