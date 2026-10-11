@@ -1,0 +1,265 @@
+# Đặc tả: App quản lý tài sản — Giai đoạn 1: Vàng
+
+> Trạng thái: **bản nháp chờ duyệt** · Ngày: 2026-10-11
+
+## 0. Nguyên tắc chung
+
+- **Một file `index.html` duy nhất**, mở bằng Chrome/Edge trên máy tính là chạy. Không build, không cài đặt, không server.
+- **App không đoán giá.** Mọi gợi ý chỉ dựa trên mục tiêu bạn tự đặt và giá bạn tự nhập. Quyết định cuối cùng là của bạn.
+- **Giai đoạn 1 chỉ làm Vàng**, nhưng cấu trúc dữ liệu đã chừa sẵn chỗ cho Tiết kiệm, Chứng chỉ tiền gửi (CCTG) và Đất.
+
+### Lưu dữ liệu
+
+| Cách | Mô tả |
+|---|---|
+| **Chính** | Dữ liệu tự lưu vào một **file `tai-san.json`** do bạn chọn (có thể đặt trong OneDrive/Google Drive để có bản sao). Chrome/Edge hỗ trợ ghi trực tiếp vào file. |
+| **Dự phòng** | Đồng thời lưu một bản trong trình duyệt, phòng khi chưa chọn file. |
+| **Sao lưu** | Nút **Xuất JSON**, **Nhập JSON**, **Xuất CSV** (mở được bằng Excel). |
+
+---
+
+## 1. Đơn vị và quy đổi
+
+```
+1 lượng = 10 chỉ · 1 chỉ = 10 phân · 1 phân = 10 ly · 1 ly = 10 dem
+→ 1 lượng = 10.000 dem · 1 chỉ = 1.000 dem
+```
+
+- Trong dữ liệu, **mọi trọng lượng lưu bằng dem** (số nguyên), nên cộng trừ không bị sai số lẻ.
+- **Khi nhập**: chọn đơn vị trong danh sách, hoặc nhập kiểu ghép `1 lượng 2 chỉ 5 phân`.
+- **Khi hiển thị**: luôn ghi dạng ghép, bỏ các thành phần bằng 0. Ví dụ `12.500 dem` → `1 lượng 2 chỉ 5 phân`.
+- **Tiền**: số nguyên đồng, hiển thị có dấu chấm ngăn cách (`118.000.000 đ`).
+
+---
+
+## 2. Các màn hình
+
+Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch sử · Tham số**. Góc phải: **Lưu vào file · Xuất/Nhập**.
+
+### 2.1 Tab "Hôm nay" (màn hình chính)
+
+**a) Bảng nhập giá**: mỗi loại vàng một dòng.
+
+| Loại | Đơn vị niêm yết | Tiệm mua vào | Tiệm bán ra | Chênh lệch |
+|---|---|---|---|---|
+| SJC miếng | lượng | `[ ô nhập ]` | `[ ô nhập ]` | 1,7% (tự tính) |
+
+- Ngày mặc định là hôm nay, sửa được (để nhập lại giá ngày cũ).
+- Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi.
+- Bấm **Cập nhật**: lưu giá vào lịch sử giá và tính lại toàn bộ.
+
+**b) Gợi ý theo lô**: chia 4 nhóm, mỗi nhóm là một bảng.
+
+| Nhóm | Điều kiện | Hiển thị thêm |
+|---|---|---|
+| 🟢 **Nên chốt** | `% lời ≥ % kỳ vọng` | Nút **Bán hết · Bán lấy lại vốn · Bán một nửa · Bán tự chọn** |
+| 🟡 **Sắp đạt** | `% kỳ vọng − % sắp đạt ≤ % lời < % kỳ vọng` | Còn cách mục tiêu bao nhiêu %, cần giá bao nhiêu |
+| ⚪ **Giữ** | `0 ≤ % lời` và chưa sắp đạt | — |
+| 🔴 **Đang lỗ** | `% lời < 0` | Lỗ bao nhiêu, giá cần tăng bao nhiêu % để hòa vốn |
+
+Cột chung cho mọi lô: số lô, loại, còn lại (món × trọng lượng), ngày mua, số ngày giữ, vốn còn lại, giá trị hôm nay, lời/lỗ (đ và %), % quy ra năm, **so với gửi ngân hàng**, **lãi thực sau lạm phát**.
+
+**c) Nhắc mua lại**: liệt kê các lần bán có đặt "giá muốn mua lại" mà `giá tiệm bán ra hôm nay ≤ giá muốn mua lại`.
+
+**d) Dòng tổng**: tổng vốn đang giữ, tổng giá trị hôm nay, lời tạm tính, lời đã chốt (từ trước đến nay), tổng lời.
+
+### 2.2 Tab "Lô vàng"
+
+- Nút **+ Thêm lô**, form gồm:
+
+  | Ô | Bắt buộc | Ghi chú |
+  |---|---|---|
+  | Ngày mua | ✔ | |
+  | Loại vàng | ✔ | Chọn trong danh sách, hoặc gõ tên mới để tạo loại mới |
+  | Số món | ✔ | Ví dụ `2` |
+  | Trọng lượng mỗi món | ✔ | Ví dụ `1 lượng` |
+  | Giá mua | ✔ | Nhập **đơn giá** (theo đơn vị niêm yết của loại) **hoặc tổng tiền**, app tự tính ô còn lại |
+  | % kỳ vọng | ✔ | Tự điền mặc định từ Tham số |
+  | % sắp đạt | ✔ | Tự điền mặc định từ Tham số |
+  | Ghi chú | | Nơi mua, số seri... |
+
+- **Số lô tự sinh**: `V-<năm mua>-<số thứ tự 3 chữ số>`, ví dụ `V-2026-001`. Số thứ tự đánh theo năm mua và không dùng lại khi xóa.
+- Một lần mua có nhiều loại món (ví dụ 1 miếng 1 lượng và 1 miếng 5 chỉ) thì nhập thành **2 lô**.
+- Danh sách lô: lọc theo **Đang giữ / Đã đóng / Tất cả** và theo loại vàng.
+- **Sửa lô**: sửa được mọi ô. **Xóa lô**: chỉ được xóa khi lô chưa có lần bán nào.
+- Bấm vào một lô: xem chi tiết và lịch sử bán của lô đó.
+
+### 2.3 Hộp thoại "Bán"
+
+Mở từ nút bán ở tab Hôm nay, tab Lô vàng hoặc tab Cần tiền.
+
+- Ngày bán (mặc định hôm nay).
+- **Số món bán** (tối đa bằng số món còn lại). Các nút gợi ý điền sẵn: Bán hết · Bán lấy lại vốn · Bán một nửa.
+- **Giá bán** (mặc định là giá tiệm mua vào hôm nay, sửa được theo giá thực tế).
+- Giá muốn mua lại (tùy chọn).
+- Ghi chú.
+- **Xem trước** trước khi xác nhận: tiền thu về, vốn của phần bán, lời/lỗ chốt, so với gửi ngân hàng, lô còn lại bao nhiêu.
+
+Lô hết món thì tự chuyển sang **Đã đóng**. Mỗi lần bán **hoàn tác được** (xóa lần bán đó).
+
+### 2.4 Tab "Cần tiền"
+
+Nhập **số tiền cần** → app đưa ra 3 phương án đặt cạnh nhau:
+
+| Phương án | Thứ tự chọn lô |
+|---|---|
+| **A. Chốt lời tốt nhất** | Lô đã đạt mục tiêu trước, rồi theo % lời **cao → thấp** |
+| **B. Ít lô nhất** | Ưu tiên **một lô** bán vừa đủ mà dư ít nhất; không có thì lấy lô có giá trị còn lại **lớn → nhỏ** |
+| **C. Giữ lô tốt** | Theo % lời **thấp → cao** (chỉ trong các lô đang lời) |
+
+Quy tắc chung cho cả 3 phương án:
+
+1. **Không đụng lô lỗ** nếu các lô lời đã đủ tiền.
+2. Thiếu tiền thì **bổ sung từ lô lỗ**, chọn lô **lỗ % ít nhất trước**, và gắn cảnh báo ⚠️.
+3. Bán theo **từng món** nên tiền thu có thể **dư** một chút; app ghi rõ số dư.
+4. Tổng tất cả các lô vẫn không đủ thì báo: còn thiếu bao nhiêu.
+
+Mỗi phương án hiển thị: danh sách `lô → số món`, tổng tiền thu, **lời/lỗ chốt**, số tiền dư, tổng vàng và tổng vốn còn lại sau khi bán. Nếu có phần lỗ thì hiện thêm: lỗ bao nhiêu, thiệt so với gửi ngân hàng bao nhiêu.
+
+Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm **Xác nhận bán**. App tạo các lần bán tương ứng.
+
+> Ghi chú: "lỗ ít nhất" (phương án D ở buổi trao đổi trước) được gộp vào quy tắc 2, vì khi phải bán lỗ thì thứ tự "lỗ % ít nhất trước" chính là cách lỗ ít nhất.
+
+### 2.5 Tab "Lịch sử"
+
+- **Lịch sử bán**: lọc theo năm, loại vàng, lô. Tổng lời đã chốt theo năm.
+- **Lịch sử giá**: các lần nhập giá theo ngày và theo loại.
+- **Thống kê theo loại vàng**: vốn đang giữ, giá trị, lời tạm tính, lời đã chốt.
+
+### 2.6 Tab "Tham số"
+
+| Tham số | Ví dụ |
+|---|---|
+| Lãi suất ngân hàng tham chiếu (%/năm) | 5,5 |
+| Lạm phát (%/năm) | 3,5 |
+| % kỳ vọng mặc định cho lô mới | 15 |
+| % sắp đạt mặc định cho lô mới | 2 |
+| Danh sách loại vàng | Tên, đơn vị niêm yết (lượng/chỉ). Đổi tên được; chỉ xóa được loại chưa có lô nào |
+
+---
+
+## 3. Công thức
+
+Ký hiệu cho một lô đang giữ:
+
+| Ký hiệu | Ý nghĩa |
+|---|---|
+| `n0` | Số món lúc mua |
+| `w` | Trọng lượng mỗi món, đổi ra **đơn vị niêm yết** của loại (`dem / 10.000` nếu lượng, `dem / 1.000` nếu chỉ) |
+| `T` | Tổng tiền mua lô |
+| `n` | Số món còn lại = `n0 − tổng số món đã bán` |
+| `P` | Giá **tiệm mua vào** hôm nay (theo đơn vị niêm yết) |
+| `d` | Số ngày giữ = hôm nay − ngày mua |
+| `r` | Lãi suất ngân hàng (%/năm) · `π` là lạm phát (%/năm) |
+
+### 3.1 Lô đang giữ
+
+```
+Vốn mỗi món        = T / n0
+Vốn còn lại     V  = n × T / n0
+Giá trị hôm nay G  = n × w × P
+Lời/lỗ             = G − V
+% lời           g  = G / V − 1
+% quy ra năm       = (1 + g)^(365 / d) − 1          (chỉ hiện khi d ≥ 30, tránh số ảo)
+Nếu gửi ngân hàng  B = V × (1 + r × d / 365)         (lãi đơn, dùng lãi suất hiện tại)
+Hơn/thua ngân hàng = G − B
+Lãi thực           = (1 + g) / (1 + π)^(d / 365) − 1
+Cần tăng để hòa vốn = V / G − 1                      (chỉ khi đang lỗ)
+Giá cần để đạt mục tiêu = V × (1 + % kỳ vọng) / (n × w)
+```
+
+### 3.2 Một lần bán `k` món với giá `S`
+
+```
+Tiền thu           = k × w × S
+Vốn phần bán       = k × T / n0
+Lời/lỗ chốt        = Tiền thu − Vốn phần bán
+Nếu gửi ngân hàng  = Vốn phần bán × (1 + r × d / 365)   (d tính tới ngày bán)
+```
+
+### 3.3 Số món cho các nút gợi ý
+
+```
+Bán hết           k = n
+Bán một nửa       k = làm tròn lên (n / 2)
+Bán lấy lại vốn   k = làm tròn lên (V / (w × P)), tối đa n
+```
+
+### 3.4 Lưu ý về độ chính xác
+
+- So với ngân hàng dùng **lãi đơn** và **lãi suất hiện tại cho toàn bộ thời gian giữ**, nên chỉ mang tính tham khảo với lô giữ lâu. Có thể nâng cấp thành bảng lãi suất theo năm ở giai đoạn sau.
+- Tiền tính ra được làm tròn đến đồng khi hiển thị; bên trong giữ nguyên để cộng dồn không lệch.
+
+---
+
+## 4. Cấu trúc dữ liệu (`tai-san.json`)
+
+```json
+{
+  "phien_ban": 1,
+  "tham_so": {
+    "lai_suat_ngan_hang": 5.5,
+    "lam_phat": 3.5,
+    "vang_ky_vong_mac_dinh": 15,
+    "vang_sap_dat_mac_dinh": 2
+  },
+  "vang": {
+    "loai": [
+      { "id": "sjc", "ten": "SJC miếng", "don_vi_niem_yet": "luong" }
+    ],
+    "gia": [
+      { "ngay": "2026-10-11", "loai_id": "sjc", "mua_vao": 118000000, "ban_ra": 120000000 }
+    ],
+    "lo": [
+      {
+        "id": "V-2026-001",
+        "loai_id": "sjc",
+        "ngay_mua": "2026-01-15",
+        "so_mon": 2,
+        "trong_luong_mon_dem": 10000,
+        "tong_tien_mua": 180000000,
+        "ky_vong_pct": 15,
+        "sap_dat_pct": 2,
+        "ghi_chu": ""
+      }
+    ],
+    "ban": [
+      {
+        "id": "B-0001",
+        "lo_id": "V-2026-001",
+        "ngay": "2026-10-11",
+        "so_mon": 1,
+        "gia_ban": 118000000,
+        "gia_mua_lai": 110000000,
+        "ghi_chu": ""
+      }
+    ],
+    "so_thu_tu": { "lo": { "2026": 1 }, "ban": 1 }
+  },
+  "tiet_kiem": [],
+  "cctg": [],
+  "dat": []
+}
+```
+
+- Giá luôn lưu **theo đơn vị niêm yết** của loại vàng.
+- Số món còn lại, trạng thái lô (đang giữ/đã đóng) **không lưu**, luôn tính lại từ `lo` và `ban`, để không bao giờ lệch nhau.
+- `phien_ban` dùng để tự nâng cấp file khi app thêm tính năng ở giai đoạn sau.
+
+---
+
+## 5. Ngoài phạm vi giai đoạn 1
+
+- Tiết kiệm, CCTG, Đất, trang Tổng quan (giai đoạn 2–3).
+- Tự lấy giá vàng từ internet.
+- Biểu đồ.
+- Bảng lãi suất ngân hàng theo từng năm.
+- So sánh bán vàng với rút tiết kiệm trước hạn (cần có mảng Tiết kiệm).
+
+---
+
+## 6. Câu hỏi còn mở
+
+1. **Lưu vào file `tai-san.json`** (cách chính ở mục 0) có hợp với bạn không? Mỗi lần mở app, bạn bấm chọn file đó một lần (trình duyệt yêu cầu vì lý do bảo mật).
+2. **"Bán một nửa"** khi số món lẻ thì làm tròn **lên** (5 món → bán 3) như trên, hay làm tròn **xuống**?
+3. Tab **"Cần tiền"** có cần cho phép **loại trừ lô** (ví dụ "lô này để dành, đừng gợi ý bán") không?
