@@ -6,6 +6,7 @@ App một file HTML để quản lý vàng theo lô: nhập giá mỗi ngày, xe
 
 1. Mở `index.html` bằng **Chrome** hoặc **Edge** (bấm đúp vào file). Không cần cài gì.
 2. Lần đầu: bấm **Tạo file dữ liệu…**, lưu `tai-san.json` vào thư mục bạn muốn (nên để trong OneDrive/Google Drive). Từ đó mọi thay đổi tự lưu vào file này.
+   **Máy thứ hai** (đã có `tai-san.json` từ máy khác): bấm **Mở tai-san.json có sẵn…** và chọn file đó. Đừng chọn file có sẵn ở hộp Tạo file: Chrome xóa trắng file đó.
 3. Những lần sau: bấm **Mở lại tai-san.json**. Trước khi mở file, app không hiện số liệu để khỏi xem nhầm bản cũ. Nếu Chrome/Edge hỏi quyền và có lựa chọn "Cho phép mỗi lần truy cập", chọn nó để khỏi phải bấm lại.
 4. Dùng chung file trên 2 máy (qua OneDrive/Drive): app tự đối chiếu khi mở file. Nếu cả máy này lẫn file đều có thay đổi, app dùng dữ liệu trong file và tự tải bản của trình duyệt về để không mất.
 
