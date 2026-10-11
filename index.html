@@ -382,6 +382,17 @@ function cache() {
   return _cache;
 }
 const latestPrice = typeId => cache().lp.get(typeId) || null;
+// Chênh lệch mua–bán thường ngày của một loại: trung vị 90 ngày trước `ngay` (không tính chính ngày đó); dưới 10 dòng giá thì không xét
+function usualSpread(typeId, ngay) {
+  const c = cache(), k = typeId + '|' + ngay; c.us ||= new Map();
+  if (!c.us.has(k)) {
+    const from = addDays(ngay, -90), sp = [];
+    for (const r of D.vang.gia) if (r.loai_id === typeId && r.ban_ra && r.ngay > from && r.ngay < ngay) sp.push(r.ban_ra / r.mua_vao - 1);
+    c.us.set(k, sp.length >= 10 ? median(sp) : null);
+  }
+  return c.us.get(k);
+}
+const EPS = 1e-6;   // so sánh % lời bỏ qua sai số tính toán (lô vốn 100tr, giá 115tr: máy tính ra 14,999…%)
 const soldMon = lotId => cache().sold.get(lotId) || 0;
 function lotW(lot) { const t = typeById(lot.loai_id); return lot.trong_luong_mon_dem / UNIT_DEM[t ? t.don_vi_niem_yet : 'chi']; }
 function lotState(lot, asOf = today()) {
@@ -403,12 +414,18 @@ function lotState(lot, asOf = today()) {
   s.targetPrice = n > 0 ? V * (1 + s.kv) / (n * w) : null;
   s.needUp = s.targetPrice / s.P - 1;              // giá cần tăng bao nhiêu % nữa để đạt mục tiêu
   s.breakEven = s.G > 0 ? V / s.G - 1 : null;       // giá cần tăng bao nhiêu % để hòa vốn
+  s.reached = s.g >= s.kv - EPS;
   // Đã giữ, nâng mục tiêu mà lời tụt dưới mức nhắc, kể cả khi nay đã lỗ (mức nhắc luôn được đặt thấp hơn lời lúc đặt)
-  s.tut = s.g < s.kv && s.nt != null && s.g < s.nt;
+  s.tut = !s.reached && s.nt != null && s.g < s.nt - EPS;
   s.costUnit = lot.tong_tien_mua / (lot.so_mon * w);               // giá vốn mỗi đơn vị niêm yết
-  // Lỗ chỉ do chênh lệch mua–bán: giá tiệm bán ra hôm nay chưa thấp hơn giá vốn, tức giá chưa giảm so với lúc mua
-  s.spreadLoss = s.g < 0 && !!p.ban_ra && p.ban_ra >= s.costUnit - 0.5;
-  s.grp = s.g >= s.kv || s.tut ? 'chot' : s.g < 0 && !s.spreadLoss ? 'lo' : s.g >= 0 && s.needUp <= s.sd ? 'sap' : 'giu';
+  // Chênh lệch hôm nay cao bất thường: tiệm hạ giá mua vào mà giữ giá bán ra (thường gặp lúc thị trường biến động)
+  s.spreadNow = p.ban_ra ? p.ban_ra / p.mua_vao - 1 : null; s.spreadUsual = p.ban_ra ? usualSpread(lot.loai_id, p.ngay) : null;
+  s.spreadHigh = s.spreadUsual != null && s.spreadNow > 1.5 * s.spreadUsual;
+  // Lỗ chỉ do chênh lệch mua–bán: giá tiệm bán ra chưa thấp hơn giá vốn (giá chưa giảm) và chênh lệch đang bình thường.
+  // Chênh lệch cao bất thường thì phần lỗ là thật: bán lúc này thiệt hơn hẳn mọi khi
+  const notBelow = s.g < 0 && !!p.ban_ra && p.ban_ra >= s.costUnit - 0.5;
+  s.spreadLoss = notBelow && !s.spreadHigh; s.wideLoss = notBelow && s.spreadHigh;
+  s.grp = s.reached || s.tut ? 'chot' : s.g < 0 && !s.spreadLoss ? 'lo' : s.g >= 0 && s.needUp <= s.sd + EPS ? 'sap' : 'giu';
   return s;
 }
 // Đỉnh lời kể từ ngày mua, theo giá đã nhập: lời tại một ngày = giá tiệm mua vào ngày đó / giá vốn mỗi đơn vị − 1
@@ -450,8 +467,7 @@ function buyInfo(t, q, p, ngay) {
   const lastUnit = lot ? lot.tong_tien_mua / (lot.so_mon * lotW(lot)) : null;
   const mDinh = peak.q * (1 - X), mRai = lastUnit ? lastUnit * (1 - X) : null;
   const entry = mRai != null ? Math.min(mDinh, mRai) : mDinh;
-  const spread = p ? q / p - 1 : null, spreads = rows.map(r => r.q / r.p - 1);
-  const usual = spreads.length >= 10 ? median(spreads) : null;
+  const spread = p ? q / p - 1 : null, usual = usualSpread(t.id, ngay);
   const held = openLots().reduce((a, l) => a + lotState(l).V, 0), limit = D.tham_so.vang_han_muc_von || null;
   const mine = openLots().filter(l => l.loai_id === t.id).map(l => lotState(l));
   const avg = mine.length ? mine.reduce((a, s) => a + s.V, 0) / mine.reduce((a, s) => a + s.n * s.w, 0) : null;
@@ -692,7 +708,7 @@ function homRest() {
     ['giu', '⚪ Giữ — chưa đạt mục tiêu', s => s.spreadLoss
       ? `<span class="muted">chưa qua chênh lệch mua–bán</span>, cần tăng ${fmtP(s.breakEven, false)} để hòa vốn`
       : `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]})`],
-    ['lo', '🔴 Đang lỗ — không nên bán, trừ khi cần tiền', s => `cần giá tăng ${fmtP(s.breakEven, false)} để hòa vốn <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`]
+    ['lo', '🔴 Đang lỗ — không nên bán, trừ khi cần tiền', s => (s.wideLoss ? `<span class="old">tiệm đang nới chênh lệch: ${fmtP(s.spreadNow, false)}, thường ${fmtP(s.spreadUsual, false)}</span>, ` : '') + `cần giá tăng ${fmtP(s.breakEven, false)} để hòa vốn <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`]
   ];
   for (let [g, title, extra] of groups) {
     const list = priced.filter(s => s.grp === g).sort((a, b) => b.g - a.g);
@@ -788,7 +804,7 @@ function cashPlans(X) {
     for (let i = rows.length - 1; i >= 0; i--) while (rows[i].k > 0 && have - rows[i].s.valMon >= X) { rows[i].k--; have -= rows[i].s.valMon; }
     return rows.filter(x => x.k > 0);
   };
-  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => (b.g >= b.kv) - (a.g >= a.kv) || b.g - a.g))));
+  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => b.reached - a.reached || b.g - a.g))));
   const single = prof.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
     .sort((a, b) => (a.k * a.s.valMon - X) - (b.k * b.s.valMon - X));
   const B = single.length ? [single[0]] : prune(fill(loss, fill(prof.slice().sort((a, b) => b.n * b.valMon - a.n * a.valMon))));
