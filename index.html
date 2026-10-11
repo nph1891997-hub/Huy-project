@@ -509,7 +509,7 @@ function dlgLot(lot) {
   const isEdit = !!lot;
   const T = D.tham_so;
   lot = lot || { ngay_mua: today(), loai_id: D.vang.loai[0]?.id || '__new', so_mon: 1, trong_luong_mon_dem: 1000, tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' };
-  let last = 'tong';
+  let last = 'tong', autoPrice = !isEdit;
   openDlg(`<h2>${isEdit ? 'Sửa lô ' + esc(lot.id) : 'Thêm lô vàng'}</h2>
     <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" required></label>
       <label class="field"><span>Loại vàng</span><select name="loai">${typeOptions(lot.loai_id)}<option value="__new" ${lot.loai_id === '__new' ? 'selected' : ''}>➕ Loại mới…</option></select></label></div>
@@ -556,6 +556,9 @@ function dlgLot(lot) {
       $('#wInfo').textContent = n > 0 && wd > 0 ? `Tổng: ${fmtW(n * wd)} = ${qty.toLocaleString('vi-VN', { maximumFractionDigits: 4 })} ${UNIT_NAME[unit]}` : '';
       const tgt = e.target && e.target.name;
       if (tgt === 'don_gia') last = 'dg'; else if (tgt === 'tong') last = 'tong';
+      // Lô mới: tự điền đơn giá = giá tiệm bán ra mới nhất của loại, cho tới khi bạn tự gõ giá
+      if (tgt === 'don_gia' || tgt === 'tong') autoPrice = false;
+      if (autoPrice && !isNew) { const p = latestPrice(f.loai.value); f.don_gia.value = p && p.ban_ra ? digits(p.ban_ra) : ''; last = 'dg'; }
       if (!qty) return;
       if (last === 'dg') f.tong.value = digits(parseM(f.don_gia.value) * qty);
       else if (tgt !== 'don_gia') f.don_gia.value = parseM(f.tong.value) ? digits(parseM(f.tong.value) / qty) : '';

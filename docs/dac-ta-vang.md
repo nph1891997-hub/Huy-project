@@ -76,7 +76,7 @@ Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi ti
   | Loại vàng | ✔ | Chọn trong danh sách, hoặc gõ tên mới để tạo loại mới |
   | Số món | ✔ | Ví dụ `2` |
   | Trọng lượng mỗi món | ✔ | Ví dụ `1 lượng` |
-  | Giá mua | ✔ | Nhập **đơn giá** (theo đơn vị niêm yết của loại) **hoặc tổng tiền**, app tự tính ô còn lại |
+  | Giá mua | ✔ | Nhập **đơn giá** (theo đơn vị niêm yết của loại) **hoặc tổng tiền**, app tự tính ô còn lại. Lô mới: đơn giá tự điền giá tiệm bán ra mới nhất của loại |
   | % kỳ vọng | ✔ | Tự điền mặc định từ Tham số |
   | % sắp đạt | ✔ | Tự điền mặc định từ Tham số |
   | Ghi chú | | Nơi mua, số seri... |
