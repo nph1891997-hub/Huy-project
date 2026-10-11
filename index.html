@@ -161,18 +161,28 @@ const NF = new Intl.NumberFormat('vi-VN'), NF1 = new Intl.NumberFormat('vi-VN', 
 const digits = x => (x == null || x === '' || isNaN(x)) ? '' : NF.format(Math.round(x));
 // Nhập tiền: "118.500.000", "118500000", "118,5" hoặc "118.5" (số nhỏ hơn 1.000 hiểu là triệu),
 // "148.500" hoặc "148500" (từ 1.000 đến dưới 1.000.000 hiểu là nghìn đồng, như bảng giá các tiệm), "118,5tr", "500k";
-// ghi kèm "đ" thì đúng số đồng như gõ ("500.000đ")
+// ghi kèm "đ" thì đúng số đồng như gõ ("500.000đ"). Đơn vị bằng chữ: "2 tỷ", "150 triệu", "500 nghìn" / "500 ngàn", "… đồng" / "vnđ"
+const MONEY_UNIT = { ty: 1e9, ti: 1e9, trieu: 1e6, tr: 1e6, nghin: 1e3, ngan: 1e3, k: 1e3, dong: 0, vnd: 0, d: 0 };   // 0: đúng số đồng như gõ
+// Tách số và đơn vị (bỏ dấu: "tỷ" → "ty"); chữ không phải đơn vị tiền thì trả về null, không đoán
+function moneyParts(s) {
+  const t = String(s ?? '').toLowerCase().replace(/\s/g, '').replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const m = t.match(/^([\d.,]*)([a-z]*)$/);
+  return m && (!m[2] || m[2] in MONEY_UNIT) ? { num: m[1], unit: m[2] } : null;
+}
+// Ô tiền có chữ mà app không hiểu (đang gõ dở thì chưa xét: chỉ gọi khi rời ô hoặc lưu)
+const badMoney = s => { const t = String(s ?? '').trim(); if (!t) return false; const p = moneyParts(t); return !p || !/\d/.test(p.num); };
 function parseM(s) {
-  let t = String(s ?? '').toLowerCase().replace(/\s/g, ''), mult = 1;
-  const exact = t.endsWith('đ'); t = t.replace(/đ/g, '');
-  if (t.endsWith('tr')) { mult = 1e6; t = t.slice(0, -2); } else if (t.endsWith('k')) { mult = 1e3; t = t.slice(0, -1); }
+  const p = moneyParts(s); if (!p) return 0;
+  let t = p.num, mult = p.unit ? MONEY_UNIT[p.unit] : null;
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');      // dấu phẩy là phần thập phân
   else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');  // 11.700.000 → dấu chấm ngăn nghìn
   const v = parseFloat(t.replace(/[^\d.]/g, ''));
   if (!isFinite(v) || v <= 0) return 0;
-  if (mult === 1 && !exact) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;
+  if (mult === 0) mult = 1;                                         // "đ", "đồng": đúng như gõ
+  else if (mult == null) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;  // không kèm đơn vị
   return Math.round(v * mult);
 }
+const moneyHelp = s => `Không hiểu số tiền "${String(s).trim()}". Gõ số, có thể kèm đơn vị: 2 tỷ, 148,5tr, 148.500, 500k, 500.000đ.`;
 // Số tiền viết vào ô nhập: dưới 1 triệu thì kèm "đ", để đọc lại (bấm Lưu) không bị hiểu thành nghìn đồng
 const fmtIn = x => !x ? '' : x < 1e6 ? digits(x) + 'đ' : digits(x);
 const parseN = s => { const v = Number(String(s ?? '').replace(',', '.')); return isNaN(v) ? 0 : v; };
@@ -1024,7 +1034,7 @@ function planSummary(plan, X) {
 const r_ = () => r();
 function viewCanTien() {
   let html = card('Cần tiền', `<form id="cashForm"><div class="row">
-    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="0" required style="width:200px"></label>
+    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="VD: 200tr, 1,5 tỷ" required style="width:200px"></label>
     <button class="primary" type="submit">Gợi ý</button></div></form>
     <p class="muted small">Tính theo giá tiệm mua vào gần nhất của từng loại. Không đụng lô lỗ nếu các lô lời đã đủ tiền; thiếu thì lấy lô lỗ ít % nhất trước. Bán theo từng món nên có thể dư một chút. Giá thực tế ở tiệm khác thì sửa lại lần bán ở tab Lịch sử.</p>`);
   if (!ui.plans) return html;
@@ -1116,7 +1126,7 @@ function viewThamSo() {
       ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', 'Báo sắp đạt khi giá còn cần tăng ≤ (%)')}</div>
     <p class="muted small">So sánh với ngân hàng dùng lãi đơn và lãi suất hiện tại cho toàn bộ thời gian giữ, nên chỉ mang tính tham khảo với lô giữ lâu.</p>`) +
     card('Mua thêm', `<div class="row">${f('vang_mua_giam_pct', 'Mua thêm khi giá giảm từ đỉnh 90 ngày ≥ (%)')}
-      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${fmtIn(T.vang_han_muc_von)}" placeholder="không giới hạn" style="width:200px"${ro}></label></div>
+      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${fmtIn(T.vang_han_muc_von)}" placeholder="không giới hạn · VD: 2 tỷ" style="width:200px"${ro}></label></div>
     <p class="muted small">App không đoán giá. Vùng mua: giá tiệm bán ra thấp hơn đỉnh 90 ngày ít nhất bấy nhiêu %; đã mua loại đó trong 90 ngày thì lần sau phải rẻ hơn lần mua gần nhất bấy nhiêu % nữa. Chênh lệch mua–bán cao bất thường thì gợi ý đợi; vốn đang giữ chạm hạn mức thì thôi gợi ý mua.</p>`) +
     card('Loại vàng', `<div class="scroll"><table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
       ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"${ro}></td>
@@ -1150,6 +1160,8 @@ function openDlg(html, onSubmit, onInput) {
 dlg.addEventListener('submit', e => {
   e.preventDefault();
   if (e.submitter && e.submitter.value === 'cancel') return dlg.close();
+  const bad = [...$('#dlgForm').querySelectorAll('input.money')].find(i => badMoney(i.value));   // Enter khi ô tiền còn chữ app không hiểu
+  if (bad) { alert(moneyHelp(bad.value)); return bad.focus(); }
   if (dlgSubmit && dlgSubmit($('#dlgForm')) !== false) dlg.close();
 });
 
@@ -1535,13 +1547,23 @@ document.addEventListener('keydown', e => {
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, textarea, select') && !dlg.open) { e.preventDefault(); undo(); }
 });
-document.addEventListener('focusin', e => { if (e.target.matches('input.money, input[type=number]')) e.target.select(); });
+document.addEventListener('focusin', e => {
+  if (e.target.matches('input.money, input[type=number]')) e.target.select();
+  if (e.target.matches('input.money')) e.target.dataset.prev = e.target.value;   // để trả lại khi gõ số tiền app không hiểu
+});
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (el.matches('input.money')) el.value = fmtIn(parseM(el.value));
+  if (!el.matches || !el.matches('input.money')) return;
+  const row = el.closest('#priceForm tr.prow');
+  // Chữ không phải đơn vị tiền: không đoán; báo rồi trả ô về giá trị cũ (dòng giá: về giá điền sẵn, không lưu)
+  if (badMoney(el.value)) {
+    const bad = el.value; el.value = el.dataset.prev ?? '';
+    if (row) resetRow(row.closest('form'), row.dataset.id); else el.dispatchEvent(new Event('input', { bubbles: true }));
+    return alert(moneyHelp(bad));
+  }
+  el.value = fmtIn(parseM(el.value));
   // Rời khỏi một dòng giá là lưu dòng đó (chuyển giữa ô mua vào và ô bán ra cùng dòng thì chưa)
-  const row = el.closest && el.closest('#priceForm tr.prow');
-  if (!row || !el.matches('input.money')) return;
+  if (!row) return;
   const to = e.relatedTarget;
   if (to && row.contains(to) && to.matches('input.money')) return;
   saveRow(row.dataset.id);
@@ -1551,6 +1573,7 @@ document.addEventListener('submit', e => {
   if (f.id === 'priceForm') e.preventDefault();   // giá lưu khi rời dòng, không có nút gửi
   else if (f.id === 'cashForm') {
     e.preventDefault();
+    if (badMoney(f.x.value)) return alert(moneyHelp(f.x.value));
     ui.cash = parseM(f.x.value); ui.plans = ui.cash > 0 ? cashPlans(ui.cash) : null; render();
   } else if (f.id === 'typeForm') {
     e.preventDefault();
@@ -1569,7 +1592,9 @@ document.addEventListener('change', e => {
     if (el.dataset.set === 'vang_mua_giam_pct' && !(v > 0)) { alert('% giảm từ đỉnh phải lớn hơn 0.'); return render(); }
     D.tham_so[el.dataset.set] = v; commit('sửa tham số');
   }
-  else if (el.dataset.setMoney) { const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
+  else if (el.dataset.setMoney) {
+    if (badMoney(el.value)) return;   // rời ô thì báo và trả về hạn mức cũ (focusout), không đổi hạn mức
+    const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
   else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit('đổi tên loại vàng'); } }
   else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit('đổi đơn vị loại vàng'); } }
   else if (el.name && el.name.startsWith('kd_') && el.form?.id === 'priceForm') { if (el.checked) { const id = el.name.slice(3); saveRow(id); markSame([id]); } }
