@@ -134,7 +134,7 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 | Lạm phát (%/năm) | 3,5 |
 | % kỳ vọng mặc định cho lô mới | 15 |
 | % sắp đạt mặc định cho lô mới | 2 |
-| Danh sách loại vàng | Tên, đơn vị niêm yết (lượng/chỉ). Đổi tên được; chỉ xóa được loại chưa có lô nào |
+| Danh sách loại vàng | Tên, đơn vị niêm yết (lượng/chỉ/phân/ly/dem). Đổi tên được; chỉ xóa được loại chưa có lô nào |
 
 ---
 
@@ -145,7 +145,7 @@ Ký hiệu cho một lô đang giữ:
 | Ký hiệu | Ý nghĩa |
 |---|---|
 | `n0` | Số món lúc mua |
-| `w` | Trọng lượng mỗi món, đổi ra **đơn vị niêm yết** của loại (`dem / 10.000` nếu lượng, `dem / 1.000` nếu chỉ) |
+| `w` | Trọng lượng mỗi món, đổi ra **đơn vị niêm yết** của loại (chia số dem cho: lượng 10.000 · chỉ 1.000 · phân 100 · ly 10 · dem 1) |
 | `T` | Tổng tiền mua lô |
 | `n` | Số món còn lại = `n0 − tổng số món đã bán` |
 | `P` | Giá **tiệm mua vào** hôm nay (theo đơn vị niêm yết) |

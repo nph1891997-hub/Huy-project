@@ -84,8 +84,9 @@ dialog h2{margin:0 0 12px;font-size:17px}
 // ===================== Hằng số & tiện ích =====================
 const KEY = 'tai-san-v1';
 const UNITS = [['luong', 10000, 'lượng'], ['chi', 1000, 'chỉ'], ['phan', 100, 'phân'], ['ly', 10, 'ly'], ['dem', 1, 'dem']];
-const UNIT_DEM = { luong: 10000, chi: 1000 };
-const UNIT_NAME = { luong: 'lượng', chi: 'chỉ' };
+const UNIT_DEM = { luong: 10000, chi: 1000, phan: 100, ly: 10, dem: 1 };
+const UNIT_NAME = { luong: 'lượng', chi: 'chỉ', phan: 'phân', ly: 'ly', dem: 'dem' };
+const unitOptions = sel => Object.keys(UNIT_NAME).map(u => `<option value="${u}" ${sel === u ? 'selected' : ''}>${UNIT_NAME[u]}</option>`).join('');
 const TABS = [['homnay', 'Hôm nay'], ['lo', 'Lô vàng'], ['cantien', 'Cần tiền'], ['lichsu', 'Lịch sử'], ['thamso', 'Tham số']];
 
 const $ = s => document.querySelector(s);
@@ -470,10 +471,10 @@ function viewThamSo() {
     card('Loại vàng', `<table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
       ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"></td>
         <td><select data-type-unit="${esc(t.id)}" ${used(t.id) ? 'disabled title="Loại đã có lô hoặc giá, không đổi đơn vị được"' : ''}>
-          ${['luong', 'chi'].map(u => `<option value="${u}" ${t.don_vi_niem_yet === u ? 'selected' : ''}>${UNIT_NAME[u]}</option>`).join('')}</select></td>
+          ${unitOptions(t.don_vi_niem_yet)}</select></td>
         <td><button class="sm danger" data-act="type-del" data-id="${esc(t.id)}" ${D.vang.lo.some(l => l.loai_id === t.id) ? 'disabled title="Loại đã có lô, không xóa được"' : ''}>Xóa</button></td></tr>`).join('')}</table>
       <form id="typeForm"><div class="row" style="margin-top:10px"><label class="field"><span>Tên loại mới</span><input name="ten" required placeholder="VD: Nhẫn 9999"></label>
-        <label class="field"><span>Đơn vị niêm yết</span><select name="dv"><option value="chi">chỉ</option><option value="luong">lượng</option></select></label>
+        <label class="field"><span>Đơn vị niêm yết</span><select name="dv">${unitOptions('chi')}</select></label>
         <button type="submit">+ Thêm loại</button></div></form>`);
 }
 
@@ -508,7 +509,7 @@ function dlgLot(lot) {
     <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" required></label>
       <label class="field"><span>Loại vàng</span><select name="loai">${typeOptions(lot.loai_id)}<option value="__new" ${lot.loai_id === '__new' ? 'selected' : ''}>➕ Loại mới…</option></select></label></div>
     <div class="row" id="newType"><label class="field"><span>Tên loại mới</span><input name="ten_moi" placeholder="VD: SJC miếng"></label>
-      <label class="field"><span>Đơn vị niêm yết giá</span><select name="dv_moi"><option value="luong">lượng</option><option value="chi">chỉ</option></select></label></div>
+      <label class="field"><span>Đơn vị niêm yết giá</span><select name="dv_moi">${unitOptions('luong')}</select></label></div>
     <div class="row"><label class="field"><span>Số món</span><input type="number" min="1" name="so_mon" value="${lot.so_mon}" style="width:70px"></label>
       <span style="padding-bottom:6px">×</span> ${wInputs('w', lot.trong_luong_mon_dem)}</div>
     <p class="small muted" id="wInfo"></p>
