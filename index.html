@@ -169,9 +169,9 @@ const digits = x => (x == null || x === '' || isNaN(x)) ? '' : NF.format(Math.ro
 const MONEY_UNIT = { ty: 1e9, ti: 1e9, trieu: 1e6, tr: 1e6, nghin: 1e3, ngan: 1e3, k: 1e3, dong: 0, vnd: 0, d: 0 };   // 0: đúng số đồng như gõ
 // Tách số và đơn vị (bỏ dấu: "tỷ" → "ty"); chữ không phải đơn vị tiền thì trả về null, không đoán
 function moneyParts(s) {
-  const t = String(s ?? '').toLowerCase().replace(/\s/g, '').replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const t = String(s ?? '').toLowerCase().replace(/\s/g, '').replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const m = t.match(/^([\d.,]*)([a-z]*)$/);
-  return m && (!m[2] || m[2] in MONEY_UNIT) ? { num: m[1], unit: m[2] } : null;
+  return m && (!m[2] || Object.hasOwn(MONEY_UNIT, m[2])) ? { num: m[1], unit: m[2] } : null;
 }
 // Ô tiền có chữ mà app không hiểu (đang gõ dở thì chưa xét: chỉ gọi khi rời ô hoặc lưu)
 const badMoney = s => { const t = String(s ?? '').trim(); if (!t) return false; const p = moneyParts(t); return !p || !/\d/.test(p.num); };
