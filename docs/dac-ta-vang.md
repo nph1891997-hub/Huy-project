@@ -15,7 +15,11 @@
 |---|---|
 | **Chính** | Dữ liệu tự lưu vào một **file `tai-san.json`** do bạn chọn (có thể đặt trong OneDrive/Google Drive để có bản sao). Chrome/Edge hỗ trợ ghi trực tiếp vào file. |
 | **Dự phòng** | Đồng thời lưu một bản trong trình duyệt, phòng khi chưa chọn file. |
-| **Sao lưu** | Nút **Xuất JSON**, **Nhập JSON**, **Xuất CSV** (mở được bằng Excel). |
+| **Sao lưu** | Tab Tham số → thẻ **Dữ liệu**: Tạo file mới, Mở file khác, **Tải bản sao lưu**, **Khôi phục từ bản sao lưu**. |
+
+Chưa kết nối file thì đầu trang hiện **một dòng nhắc** kèm nút (Mở lại file / Tạo file dữ liệu). Đầu trang không đặt nút dữ liệu nào khác để giữ gọn.
+
+Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hướng dẫn 2 bước: tạo file dữ liệu, rồi thêm lô đầu tiên.
 
 ---
 
@@ -35,7 +39,7 @@
 
 ## 2. Các màn hình
 
-Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch sử · Tham số**. Góc phải: **Lưu vào file · Xuất/Nhập**.
+Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch sử · Tham số**. Góc phải: trạng thái lưu.
 
 ### 2.1 Tab "Hôm nay" (màn hình chính)
 
@@ -46,14 +50,15 @@ Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch s�
 | SJC miếng | lượng | `[ ô nhập ]` | `[ ô nhập ]` | +1,7% (= bán ra ÷ mua vào − 1) |
 
 - Ngày mặc định là hôm nay, sửa được (để nhập lại giá ngày cũ).
-- Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi.
-- Bấm **Cập nhật**: lưu giá vào lịch sử giá và tính lại toàn bộ.
+- Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi. Loại nào giá chưa cập nhật hôm nay thì dòng "giá ngày …" hiện màu vàng.
+- Bấm **Cập nhật**: **chỉ lưu những loại có giá thay đổi**, loại không sửa vẫn giữ ngày cũ (để không tưởng nhầm giá cũ là giá hôm nay). Không loại nào thay đổi thì hỏi có ghi nhận "giá không đổi" cho ngày đó không.
+- **Chống gõ nhầm**: giá mua vào lệch quá 15% so với lần trước (thừa/thiếu số 0, nhầm giá lượng với giá chỉ) thì hỏi lại trước khi lưu.
 
 **b) Gợi ý theo lô**: chia 4 nhóm, mỗi nhóm là một bảng.
 
 | Nhóm | Điều kiện | Hiển thị thêm |
 |---|---|---|
-| 🟢 **Nên chốt** | `% lời ≥ % kỳ vọng` | Nút **Bán hết · Bán lấy lại vốn · Bán một nửa · Bán tự chọn** |
+| 🟢 **Nên chốt** | `% lời ≥ % kỳ vọng` | Nút **Bán…** (mở hộp thoại bán, có sẵn nút Bán hết / Lấy lại vốn / Bán một nửa) và **Giữ, nâng mục tiêu** |
 | 🟡 **Sắp đạt** | `% kỳ vọng − % sắp đạt ≤ % lời < % kỳ vọng` | Còn cách mục tiêu bao nhiêu %, cần giá bao nhiêu |
 | ⚪ **Giữ** | `0 ≤ % lời` và chưa sắp đạt | — |
 | 🔴 **Đang lỗ** | `% lời < 0` | Lỗ bao nhiêu, giá cần tăng bao nhiêu % để hòa vốn |
@@ -62,7 +67,11 @@ Cột chung cho mọi lô (giữ gọn, chỉ những gì cần để quyết đ
 
 Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi tiết** của lô (tab Lô vàng). Nhóm ⚪ **Giữ** thu gọn mặc định vì không cần làm gì.
 
-**c) Nhắc mua lại**: liệt kê các lần bán có đặt "giá muốn mua lại" mà `giá tiệm bán ra hôm nay ≤ giá muốn mua lại`.
+**Giữ, nâng mục tiêu**: khi quyết định giữ một lô đã đạt mục tiêu, nhập mục tiêu mới (mặc định: mức lời hiện tại làm tròn lên bội số 5%, ví dụ +42,5% → 45%; app hiện giá cần đạt). Lô chuyển sang nhóm Giữ, không bị nhắc lại mỗi ngày cho tới khi đạt mức mới.
+
+**c) Nhắc mua lại**:
+- **🔁 Có thể mua lại**: các lần bán có `giá tiệm bán ra ≤ giá muốn mua lại`. Nút **Mua lại…** mở form thêm lô điền sẵn loại, số món, trọng lượng, mục tiêu của lô cũ và đơn giá hôm nay; lưu xong thì nhắc tự tắt. Nút **Bỏ nhắc**.
+- **Đang chờ giá mua lại**: các lần bán chưa tới giá, thu gọn mặc định.
 
 **d) Dòng tổng**: tổng vốn đang giữ, tổng giá trị hôm nay, lời tạm tính, lời đã chốt (từ trước đến nay), tổng lời.
 
@@ -98,7 +107,9 @@ Mở từ nút bán ở tab Hôm nay, tab Lô vàng hoặc tab Cần tiền.
 - Ghi chú.
 - **Xem trước** trước khi xác nhận: tiền thu về, vốn của phần bán, lời/lỗ chốt, so với gửi ngân hàng, lô còn lại bao nhiêu.
 
-Lô hết món thì tự chuyển sang **Đã đóng**. Mỗi lần bán **hoàn tác được** (xóa lần bán đó).
+- Dưới ô giá ghi rõ giá đang điền sẵn là **giá ngày nào**; giá cũ thì nhắc kiểm tra giá thực tế.
+
+Lô hết món thì tự chuyển sang **Đã đóng**. Mỗi lần bán **sửa được** (ngày, số món, giá, mua lại, ghi chú; dùng cùng hộp thoại) hoặc **hoàn tác** (xóa lần bán đó).
 
 ### 2.4 Tab "Cần tiền"
 
@@ -119,14 +130,17 @@ Quy tắc chung cho cả 3 phương án:
 
 Mỗi phương án hiển thị: danh sách `lô → số món`, tổng tiền thu, **lời/lỗ chốt**, số tiền dư, tổng vàng và tổng vốn còn lại sau khi bán. Nếu có phần lỗ thì hiện thêm: lỗ bao nhiêu, thiệt so với gửi ngân hàng bao nhiêu.
 
-Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm **Xác nhận bán**. App tạo các lần bán tương ứng.
+Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm **Xác nhận bán**. App tạo các lần bán tương ứng (giá = giá tiệm mua vào gần nhất; giá thực tế khác thì sửa lần bán ở tab Lịch sử).
+
+- Phương án nào **giống hệt** phương án trước thì không hiện lại, chỉ ghi một dòng "Phương án C giống A".
+- Giá đang dùng **không phải giá hôm nay** thì cảnh báo, nhắc cập nhật giá trước khi bán.
 
 > Ghi chú: "lỗ ít nhất" (phương án D ở buổi trao đổi trước) được gộp vào quy tắc 2, vì khi phải bán lỗ thì thứ tự "lỗ % ít nhất trước" chính là cách lỗ ít nhất.
 
 ### 2.5 Tab "Lịch sử"
 
-- **Lịch sử bán**: lọc theo năm, loại vàng, lô. Tổng lời đã chốt theo năm.
-- **Lịch sử giá**: các lần nhập giá theo ngày và theo loại.
+- **Lịch sử bán**: lọc theo năm. Mỗi dòng có nút **Sửa** và **Hoàn tác**. Tổng lời đã chốt theo năm.
+- **Lịch sử giá**: hiện 30 dòng gần nhất, có nút xem tất cả. Xóa được từng dòng.
 - **Thống kê theo loại vàng**: vốn đang giữ, giá trị, lời tạm tính, lời đã chốt.
 
 ### 2.6 Tab "Tham số"
