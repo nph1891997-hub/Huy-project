@@ -1089,12 +1089,15 @@ function salesTable(sales, withLot = true) {
 }
 function viewLichSu() {
   const years = [...new Set(D.vang.ban.map(b => b.ngay.slice(0, 4)))].sort().reverse();
-  const sales = D.vang.ban.filter(b => !ui.lsYear || b.ngay.startsWith(ui.lsYear)).sort((a, b) => b.ngay.localeCompare(a.ngay) || b.id.localeCompare(a.id));
+  // Lịch sử bán: mặc định 30 lần gần nhất, chọn năm thì hiện cả năm (dữ liệu nhiều năm có hàng nghìn lần bán, vẽ hết thì chậm)
+  const allSales = D.vang.ban.filter(b => !ui.lsYear || b.ngay.startsWith(ui.lsYear)).sort((a, b) => b.ngay.localeCompare(a.ngay) || b.id.localeCompare(a.id));
+  const sales = ui.lsYear ? allSales : allSales.slice(0, 30);
   const byYear = years.map(y => {
     const list = D.vang.ban.filter(b => b.ngay.startsWith(y)).map(saleCalc).filter(Boolean);
     return `<tr><td>${y}</td><td class="n">${list.length}</td><td class="n">${fmtM(list.reduce((a, c) => a + c.thu, 0))}</td><td class="n ${cls(list.reduce((a, c) => a + c.loi, 0))}">${fmtMS(list.reduce((a, c) => a + c.loi, 0))}</td></tr>`;
   }).join('');
-  let html = card('Lịch sử bán', `<div class="row"><select id="lsYear"><option value="">Tất cả các năm</option>${years.map(y => `<option ${ui.lsYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+  let html = card('Lịch sử bán', `<div class="row"><select id="lsYear"><option value="">30 lần bán gần nhất</option>${years.map(y => `<option ${ui.lsYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    ${ui.lsYear ? `<span class="small muted">${sales.length} lần bán</span>` : ''}</div>
     ${sales.length ? salesTable(sales) : '<p class="muted">Chưa có lần bán nào.</p>'}
     ${years.length ? `<h3>Lời đã chốt theo năm</h3><div class="scroll"><table style="width:auto"><tr><th>Năm</th><th class="n">Số lần bán</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ chốt</th></tr>${byYear}</table></div>` : ''}`);
   const typeRows = D.vang.loai.map(t => {
