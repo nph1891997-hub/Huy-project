@@ -7,6 +7,9 @@ const out = S('head.html') + '<style>\n' + S('style.css') + '</style>\n' + S('bo
   '<script>\n\'use strict\';\n' + js.map(f => `// ===== ${f} =====\n` + S(f)).join('\n') + '</script>\n</body>\n</html>\n';
 const target = path.join(__dirname, 'index.html');
 if (process.argv.includes('--check')) {
+  // Hộp hỏi / báo phải đi qua ask/tell (src/01-tien-ich.js), xem lý do ở đó
+  const raw = js.filter(f => /(?<![\w.$])(confirm|alert)\(/.test(S(f).replace(/window\.(confirm|alert)\(/g, '')));
+  if (raw.length) { console.error('Gọi thẳng confirm/alert trong ' + raw.join(', ') + ': dùng ask/tell'); process.exit(1); }
   if (fs.readFileSync(target, 'utf8') !== out) { console.error('index.html chưa khớp src/: chạy node build.js'); process.exit(1); }
   console.log('index.html khớp src/');
 } else { fs.writeFileSync(target, out); console.log('đã ghép', js.length, 'file JS →', target); }

@@ -5,7 +5,7 @@ const act = {
   'lot-edit': d => dlgLot(lotById(d.id)),
   'lot-del': d => {
     const nb = D.vang.ban.filter(b => b.lo_id === d.id).length;
-    if (!confirm(`Xóa lô ${d.id}${nb ? ` cùng ${nb} lần bán của nó (lời đã chốt của các lần bán này cũng mất)` : ''}?`)) return;
+    if (!ask(`Xóa lô ${d.id}${nb ? ` cùng ${nb} lần bán của nó (lời đã chốt của các lần bán này cũng mất)` : ''}?`)) return;
     D.vang.lo = D.vang.lo.filter(l => l.id !== d.id); D.vang.ban = D.vang.ban.filter(b => b.lo_id !== d.id);
     if (ui.loOpen === d.id) ui.loOpen = null;
     commit('xóa lô ' + d.id);
@@ -19,7 +19,7 @@ const act = {
     dlgLot(null, { loai_id: lot.loai_id, trong_luong_mon_dem: lot.trong_luong_mon_dem, so_mon: b.so_mon, fromSale: b.id });
   },
   buy: d => { const f = $('#priceForm'); dlgLot(null, { loai_id: d.id, don_gia: (f && parseM(f['br_' + d.id].value)) || latestPrice(d.id)?.ban_ra }); },
-  'sale-del': d => { if (confirm('Xóa lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); commit('xóa lần bán ' + d.id); } },
+  'sale-del': d => { if (ask('Xóa lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); commit('xóa lần bán ' + d.id); } },
   // Bật lại các nhắc mua lại vừa tự tắt khi thêm lô (lô mới vẫn giữ)
   'rebuy-keep': () => {
     const off = (ui.rebuyOff || []).map(x => ({ x, b: D.vang.ban.find(b => b.id === x.id) })).filter(y => y.b);
@@ -29,12 +29,12 @@ const act = {
     commit('giữ lại nhắc mua lại ' + off.map(y => y.x.id).join(', '));
   },
   'rebuy-clear': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) { b.gia_mua_lai = null; commit('bỏ nhắc mua lại ' + b.id); } },
-  'price-del': d => { const p = D.vang.gia[+d.i]; if (p && confirm('Xóa dòng giá ngày ' + fmtD(p.ngay) + '?')) { D.vang.gia.splice(+d.i, 1); commit('xóa giá ngày ' + fmtD(p.ngay)); } },
-  'type-del': d => { if (confirm('Xóa loại vàng này cùng lịch sử giá của nó?')) { D.vang.loai = D.vang.loai.filter(t => t.id !== d.id); D.vang.gia = D.vang.gia.filter(p => p.loai_id !== d.id); commit('xóa loại vàng'); } },
+  'price-del': d => { const p = D.vang.gia[+d.i]; if (p && ask('Xóa dòng giá ngày ' + fmtD(p.ngay) + '?')) { D.vang.gia.splice(+d.i, 1); commit('xóa giá ngày ' + fmtD(p.ngay)); } },
+  'type-del': d => { if (ask('Xóa loại vàng này cùng lịch sử giá của nó?')) { D.vang.loai = D.vang.loai.filter(t => t.id !== d.id); D.vang.gia = D.vang.gia.filter(p => p.loai_id !== d.id); commit('xóa loại vàng'); } },
   'plan-confirm': d => {
     const p = ui.plans[+d.plan], rows = p.rows.filter(x => x.k > 0);
     const S = planSummary({ rows }, ui.cash);
-    if (!confirm(`Xác nhận bán theo ${p.name}?\n\n` + S.rows.map(x => `${x.s.lot.id}: ${x.r.k} món → ${fmtM(x.t)}`).join('\n') + `\n\nTổng thu: ${fmtM(S.thu)} · Lời/lỗ: ${fmtMS(S.loi)}`)) return;
+    if (!ask(`Xác nhận bán theo ${p.name}?\n\n` + S.rows.map(x => `${x.s.lot.id}: ${x.r.k} món → ${fmtM(x.t)}`).join('\n') + `\n\nTổng thu: ${fmtM(S.thu)} · Lời/lỗ: ${fmtMS(S.loi)}`)) return;
     for (const x of S.rows) {
       D.vang.ban.push({ id: nextSaleId(), lo_id: x.s.lot.id, ngay: today(), so_mon: x.r.k, gia_ban: x.s.P, gia_mua_lai: null, ghi_chu: 'Cần tiền ' + fmtM(ui.cash) });
     }
@@ -57,7 +57,7 @@ const act = {
       if (same && !fileHandle) errH = pendingHandle;
       // Mở nhầm bản sao lưu (file do app tải về) khi đã có file dữ liệu: hỏi khôi phục vào file dữ liệu thay vì chuyển sang ghi vào bản sao lưu
       if (cur && !same && isBackupName(h.name)) {
-        if (!confirm(`${h.name} là bản sao lưu. Khôi phục nội dung này vào ${cur.name}?\n\n` + (fileHandle ? 'Dữ liệu đang mở sẽ được thay toàn bộ (Hoàn tác được).' : `Nội dung hiện tại của ${cur.name} sẽ được tải về trước.`))) return;
+        if (!ask(`${h.name} là bản sao lưu. Khôi phục nội dung này vào ${cur.name}?\n\n` + (fileHandle ? 'Dữ liệu đang mở sẽ được thay toàn bộ (Hoàn tác được).' : `Nội dung hiện tại của ${cur.name} sẽ được tải về trước.`))) return;
         const F = await readData(h);
         if (fileHandle) { D = F; ui.plans = null; return commit('khôi phục từ ' + h.name); }
         return await restoreInto(pendingHandle, F, h.name);
@@ -68,6 +68,8 @@ const act = {
   'file-new': async () => {
     let h;
     const cur = fileHandle || pendingHandle;
+    // Hộp Lưu của Chrome xóa trắng file được chọn (khi bấm Thay thế): nhắc trước, nhất là máy thứ hai đã có tai-san.json qua OneDrive
+    if (!ask(`Tạo file dữ liệu MỚI${cur ? '' : ' (lần đầu dùng app)'}.\n\nNếu đã có file tai-san.json (ví dụ từ máy khác qua OneDrive/Google Drive), bấm Hủy rồi dùng "Mở file có sẵn…" / "Mở file khác…".\nỞ hộp Lưu sắp hiện, chọn trùng một file có sẵn và bấm Thay thế thì Chrome xóa trắng file đó.`)) return;
     try {
       // Không gợi ý trùng tên file đang dùng: Chrome xóa trắng file được chọn trong hộp Lưu ngay lúc chọn
       h = await showSaveFilePicker({ suggestedName: !cur ? 'tai-san.json' : cur.name === 'tai-san-moi.json' ? 'tai-san-moi-2.json' : 'tai-san-moi.json', types: JSON_TYPES });
@@ -195,7 +197,7 @@ document.addEventListener('change', e => {
   else if (el.id === 'lsPYear') { ui.lsPYear = el.value; render(); }
   else if (el.dataset.set) {
     const v = parseN(el.value), rule = PARAM_RULES[el.dataset.set];
-    if (rule && !rule[0](v)) { alert(rule[1]); return render(); }   // sai thì báo và trả ô về giá trị cũ
+    if (rule && !rule[0](v)) { tell(rule[1]); return render(); }   // sai thì báo và trả ô về giá trị cũ
     D.tham_so[el.dataset.set] = v; commit('sửa tham số');
   }
   else if (el.dataset.setMoney) { const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
@@ -208,10 +210,10 @@ document.addEventListener('change', e => {
     const file = el.files[0]; el.value = ''; if (!file) return;
     const forView = ui.importMode === 'view'; ui.importMode = '';
     file.text().then(text => {
-      let F; try { F = JSON.parse(text); } catch { return alert('File không phải JSON hợp lệ.'); }
-      if (!F || !F.vang) return alert('File không đúng định dạng dữ liệu của app.');
+      let F; try { F = JSON.parse(text); } catch { return tell('File không phải JSON hợp lệ.'); }
+      if (!F || !F.vang) return tell('File không đúng định dạng dữ liệu của app.');
       if (forView) { D = normalize(F); ui.viewLoaded = true; ui.viewTemp = false; ui.plans = null; _cache = null; tab = 'homnay'; return render(); }
-      if (!confirm('Dữ liệu trong file sẽ THAY THẾ toàn bộ dữ liệu đang mở. Tiếp tục?')) return;
+      if (!ask('Dữ liệu trong file sẽ THAY THẾ toàn bộ dữ liệu đang mở. Tiếp tục?')) return;
       D = normalize(F); ui.plans = null; commit('khôi phục từ bản sao lưu');
     });
   }
@@ -226,7 +228,7 @@ function fileError(e, h) {
     // lỗi khác (chưa cho quyền…) giữ nguyên các nút đang có
     if (h === pendingHandle && (e.bad || e.name === 'NotFoundError')) { ui.gateBad = !!e.bad; ui.gateLost = !e.bad; ui.gateRestore = null; }
     render();
-  } else alert(fileErrMsg(e, h));
+  } else tell(fileErrMsg(e, h));
 }
 function download(name, text, type) {
   const a = document.createElement('a');

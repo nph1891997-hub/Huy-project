@@ -32,7 +32,7 @@ exports.run = async (browser, chk) => {
   const giu = await T.text(page, 'details[data-lazy=giu]');
   has(giu, 'chưa qua chênh lệch mua–bán', 'ghi chú lỗ chênh lệch'); has(giu, 'Bán…', 'nhóm Giữ có nút Bán… (B14)');
   // Hôm sau giá 17.600 → +15,8% → Nên chốt; Giữ, nâng mục tiêu
-  await page.clock.setSystemTime('2026-10-12T09:00:00+07:00'); await page.evaluate(() => tickDay()); await page.waitForTimeout(50);
+  await T.day(page, '2026-10-12T09:00:00+07:00');
   eq(await page.locator('#priceForm [name=ngay]').inputValue(), '2026-10-12', 'ô Ngày sang ngày mới');
   await T.price(page, tid, '17.600', '17.900');
   has(await T.app(page), 'Nên chốt — đã đạt mục tiêu (1)', 'đạt mục tiêu');

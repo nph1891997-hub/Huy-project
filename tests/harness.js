@@ -100,6 +100,10 @@ async function machine(browser, disk, { name = 'A', fsa = true, tz = 'Asia/Ho_Ch
 
 // Tiện ích thao tác
 const T = {
+  // Đợi app vẽ lại xong (softRender hẹn giờ 0 ms; máy chậm thì có thể trễ hơn mọi waitForTimeout ngắn)
+  settle: async page => { await page.waitForFunction(() => !softPending && !softTimer).catch(() => { }); await page.waitForTimeout(30); },
+  // Đổi giờ hệ thống rồi cho app kiểm tra sang ngày như mỗi phút
+  day: async (page, time) => { await page.clock.setSystemTime(time); await page.evaluate(() => tickDay()); await T.settle(page); },
   text: async (page, sel) => (await page.locator(sel).first().textContent().catch(() => null))?.replace(/\s+/g, ' ').trim(),
   app: async page => (await page.locator('#app').innerText()).replace(/\s+/g, ' ').trim(),
   status: page => page.locator('#status').textContent(),

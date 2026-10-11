@@ -88,7 +88,7 @@ function persist() {
       // Lần ghi lỗi không tính là đã lưu: lần lưu sau so với lần ghi thành công cuối, không báo nhầm "sửa ở nơi khác"
       if (localOK) { seen = { mod: null, cap: ts }; return persistStatus(); }
       setStatus('Chưa lưu được: bộ nhớ trình duyệt đầy', true);
-      if (!localErrShown) { localErrShown = true; alert('Không lưu được vào bộ nhớ trình duyệt (có thể đã đầy). Hãy lưu vào file để không mất dữ liệu: Tham số → Dữ liệu → Tạo file mới….'); }
+      if (!localErrShown) { localErrShown = true; tell('Không lưu được vào bộ nhớ trình duyệt (có thể đã đầy). Hãy lưu vào file để không mất dữ liệu: Tham số → Dữ liệu → Tạo file mới….'); }
       return;
     }
     try {
@@ -97,12 +97,12 @@ function persist() {
       if (localOK) setMark(ts);
       else {   // bản trong trình duyệt đã cũ: xóa mốc để lần mở sau dùng dữ liệu trong file
         try { localStorage.removeItem(SYNC_KEY); } catch { }
-        if (!localErrShown) { localErrShown = true; alert('Bộ nhớ trình duyệt đầy; dữ liệu vẫn được lưu vào file ' + h.name + '.'); }
+        if (!localErrShown) { localErrShown = true; tell('Bộ nhớ trình duyệt đầy; dữ liệu vẫn được lưu vào file ' + h.name + '.'); }
       }
       setStatus('Đã lưu vào ' + h.name);
     } catch (e) {
       setStatus('Lỗi ghi file: ' + e.message, true);
-      if (!saveErrShown) { saveErrShown = true; alert('Không ghi được vào file ' + h.name + ' (' + e.message + ').\nDữ liệu vẫn còn trong trình duyệt. Kiểm tra file rồi vào Tham số → Dữ liệu → Mở file khác… để kết nối lại.'); }
+      if (!saveErrShown) { saveErrShown = true; tell('Không ghi được vào file ' + h.name + ' (' + e.message + ').\nDữ liệu vẫn còn trong trình duyệt. Kiểm tra file rồi vào Tham số → Dữ liệu → Mở file khác… để kết nối lại.'); }
     }
   });
 }
@@ -199,9 +199,10 @@ async function useFile(handle, fromNew, seenAs) {
   if (localOK) setMark(D.cap_nhat || '');
   else {   // bộ nhớ trình duyệt đầy: xóa mốc để lần mở sau dùng dữ liệu trong file
     try { localStorage.removeItem(SYNC_KEY); } catch { }
-    if (!localErrShown) { localErrShown = true; alert('Bộ nhớ trình duyệt đầy; dữ liệu vẫn nằm trong file ' + handle.name + '.'); }
+    if (!localErrShown) { localErrShown = true; tell('Bộ nhớ trình duyệt đầy; dữ liệu vẫn nằm trong file ' + handle.name + '.'); }
   }
-  setStatus('Đã mở ' + handle.name);
+  // Ghi kèm lần sửa cuối của dữ liệu: OneDrive chưa kéo kịp bản mới từ máy khác thì thấy ngay số liệu cũ
+  setStatus('Đã mở ' + handle.name + (D.cap_nhat ? ' · sửa lần cuối ' + fmtWhen(D.cap_nhat) : ''));
   render();
 }
 // Dấu hiện tại của một file (để ghi đè có chủ ý mà không bị coi là "file đã bị sửa ở nơi khác")

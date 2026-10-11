@@ -42,6 +42,12 @@ exports.run = async (browser, chk) => {
   pv.__policy = () => true; await T.price(pv, 'tsjc', '175', '177'); await pv.waitForTimeout(80);
   has(await T.app(pv), 'Đang xem với giá vừa gõ', 'xem với giá vừa gõ'); has(await T.app(pv), 'Nên chốt', 'tính lại nhóm');
   eq(await pv.locator('[data-act=sell]').first().isVisible().catch(() => false), false, 'không có nút Bán ở chế độ xem');
+  // Điện thoại (390 px): tab Hôm nay và Cần tiền không phải cuộn ngang
+  await pv.setViewportSize({ width: 390, height: 844 }); await T.tab(pv, 'homnay'); await pv.waitForTimeout(50);
+  const overflow = () => pv.evaluate(() => [...document.querySelectorAll('#app .scroll, #app')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.querySelector('table')?.className || e.id));
+  eq(await overflow(), [], 'Hôm nay không cuộn ngang ở 390 px');
+  await T.tab(pv, 'cantien'); await pv.locator('#cashForm [name=x]').fill('200'); await pv.locator('#cashForm button[type=submit]').click(); await pv.waitForTimeout(80);
+  eq(await overflow(), [], 'Cần tiền không cuộn ngang ở 390 px');
   ok([p, pb, pv].every(x => !x.__log.errors.length), 'không lỗi JS');
   return fails;
 };

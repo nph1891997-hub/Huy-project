@@ -30,11 +30,15 @@ function normalBuy(typeId, ngay, usual) {
   const c = cache(), k = typeId + '|' + ngay; c.nb ||= new Map();
   if (!c.nb.has(k)) {
     let best = null;
-    for (const r of D.vang.gia) if (r.loai_id === typeId && r.ban_ra && r.ngay < ngay && r.ban_ra / r.mua_vao - 1 <= 1.5 * usual && (!best || r.ngay > best.ngay)) best = r;
+    for (const r of D.vang.gia) if (r.loai_id === typeId && r.ban_ra && r.ngay < ngay && !isHighSpread(r.ban_ra / r.mua_vao - 1, usual) && (!best || r.ngay > best.ngay)) best = r;
     c.nb.set(k, best ? best.mua_vao : null);
   }
   return c.nb.get(k);
 }
+// Chênh lệch mua–bán cao bất thường: hơn 1,5 lần mức thường ngày VÀ cao hơn mức thường ít nhất 0,5 điểm %
+// (loại có chênh lệch thường rất nhỏ, 0,5%, thì 0,8% chưa tính là cao). Mọi chỗ xét "chênh lệch cao" dùng hàm này
+const SPREAD_X = 1.5, SPREAD_MIN = 0.005;
+const isHighSpread = (now, usual) => usual != null && now != null && now > Math.max(SPREAD_X * usual, usual + SPREAD_MIN);
 const EPS = 1e-6;   // so sánh % lời bỏ qua sai số tính toán (lô vốn 100tr, giá 115tr: máy tính ra 14,999…%)
 const soldMon = lotId => cache().sold.get(lotId) || 0;
 function lotW(lot) { const t = typeById(lot.loai_id); return lot.trong_luong_mon_dem / UNIT_DEM[t ? t.don_vi_niem_yet : 'chi']; }
@@ -63,7 +67,7 @@ function lotState(lot, asOf = today()) {
   s.costUnit = lot.tong_tien_mua / (lot.so_mon * w);               // giá vốn mỗi đơn vị niêm yết
   // Chênh lệch hôm nay cao bất thường: tiệm hạ giá mua vào mà giữ giá bán ra (thường gặp lúc thị trường biến động)
   s.spreadNow = p.ban_ra ? p.ban_ra / p.mua_vao - 1 : null; s.spreadUsual = p.ban_ra ? usualSpread(lot.loai_id, p.ngay) : null;
-  s.spreadHigh = s.spreadUsual != null && s.spreadNow > 1.5 * s.spreadUsual;
+  s.spreadHigh = isHighSpread(s.spreadNow, s.spreadUsual);
   // Lỗ chỉ do chênh lệch mua–bán: giá tiệm bán ra chưa thấp hơn giá vốn (giá chưa giảm) và chênh lệch đang bình thường.
   // Chênh lệch cao bất thường thì phần lỗ là thật: bán lúc này thiệt hơn hẳn mọi khi
   const notBelow = s.g < 0 && !!p.ban_ra && p.ban_ra >= s.costUnit - 0.5;
@@ -134,7 +138,7 @@ function buyInfo(t, q, p, ngay) {
   b.itemDem = [...D.vang.lo].reverse().find(l => l.loai_id === t.id)?.trong_luong_mon_dem || unitDem;
   b.itemPrice = q * b.itemDem / unitDem;
   // Mốc mua lại là kế hoạch bạn đặt lúc bán nên xét trước "Cân nhắc"; có lô cùng loại đang Nên chốt thì ghi kèm để bạn tự quyết
-  b.kind = limit && (held >= limit || limit - held < b.itemPrice) ? 'full' : usual != null && spread > 1.5 * usual ? 'wait'
+  b.kind = limit && (held >= limit || limit - held < b.itemPrice) ? 'full' : isHighSpread(spread, usual) ? 'wait'
     : rebuyMark != null && q <= rebuyMark ? 'rebuy'
     : chot.length && q <= near ? 'consider'          // vừa nên chốt vừa vùng mua: bán rồi mua lại là mất chênh lệch 2 lần
     : q <= entry ? 'buy' : 'notyet';

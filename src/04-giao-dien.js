@@ -46,6 +46,7 @@ function updateUndoBtn() { const u = undoStack.at(-1), bu = $('#btnUndo'); bu.cl
 // Vẽ sau khi con trỏ chuyển xong (lưu do rời dòng xảy ra giữa lúc con trỏ đang chuyển sang ô khác).
 let pointerIsDown = false, softPending = false, softTimer = 0;
 function softRender() { softPending = true; if (!pointerIsDown && !softTimer) softTimer = setTimeout(flushSoft, 0); }
+function afterDialog() { pointerIsDown = false; if (softPending && !softTimer) softTimer = setTimeout(flushSoft, 0); }
 function flushSoft() {
   clearTimeout(softTimer); softTimer = 0;
   if (!softPending) return;

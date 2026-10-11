@@ -7,6 +7,10 @@ const unitOptions = sel => Object.keys(UNIT_NAME).map(u => `<option value="${u}"
 const TABS = [['homnay', 'Hôm nay'], ['lo', 'Lô vàng'], ['cantien', 'Cần tiền'], ['lichsu', 'Lịch sử'], ['thamso', 'Tham số']];
 
 const $ = s => document.querySelector(s);
+// Hộp hỏi / hộp báo của trình duyệt. Hộp hiện giữa lúc đang bấm chuột (rời dòng giá bằng cú bấm) thì nuốt mất sự kiện thả chuột:
+// sau mỗi hộp coi như đã thả chuột, kẻo phần vẽ lại đang chờ thả chuột (softRender) đứng mãi ở số cũ. Mọi chỗ dùng ask/tell, không gọi confirm/alert trực tiếp
+const ask = msg => { const r = window.confirm(msg); afterDialog(); return r; };
+const tell = msg => { window.alert(msg); afterDialog(); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);

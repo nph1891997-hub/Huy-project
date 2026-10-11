@@ -69,10 +69,10 @@ function viewCanTien() {
     if (p.same) return '';
     const S = planSummary(p, X);
     return `<section class="card"><h2>${esc(p.name)}</h2><p class="muted small">${esc(p.desc)}</p>
-      <div class="scroll"><table><tr><th>Lô</th><th>Loại</th><th class="n">Bán (món)</th><th class="n">Còn</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ</th></tr>
-      ${S.rows.map((x, ri) => `<tr><td>${esc(x.s.lot.id)}</td><td>${esc(x.s.t?.ten)}<br><span class="small muted">${fmtW(x.s.lot.trong_luong_mon_dem)}/món</span></td>
-        <td class="n"><input type="number" min="0" max="${x.s.n}" value="${x.r.k}" data-plan="${pi_}" data-row="${ri}" style="width:64px"></td><td class="n">${x.s.n}</td>
-        <td class="n">${fmtM(x.t)}</td><td class="n ${cls(x.loi)}">${fmtMS(x.loi)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Không có lô phù hợp.</td></tr>'}
+      <div class="scroll"><table class="plan"><tr class="hd"><th>Lô</th><th>Loại</th><th class="n">Bán (món)</th><th class="n">Còn</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ</th></tr>
+      ${S.rows.map((x, ri) => `<tr><td class="c-lo"><b>${esc(x.s.lot.id)}</b></td><td class="c-loai">${esc(x.s.t?.ten)}<br><span class="small muted">${fmtW(x.s.lot.trong_luong_mon_dem)}/món<span class="m-only"> · còn ${x.s.n} món</span></span></td>
+        <td class="n c-k"><input type="number" min="0" max="${x.s.n}" value="${x.r.k}" data-plan="${pi_}" data-row="${ri}" style="width:64px"></td><td class="n c-con">${x.s.n}</td>
+        <td class="n c-thu">${fmtM(x.t)}</td><td class="n c-loi ${cls(x.loi)}">${fmtMS(x.loi)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Không có lô phù hợp.</td></tr>'}
       <tr class="total"><td colspan="4">Tổng thu</td><td class="n">${fmtM(S.thu)}</td><td class="n ${cls(S.loi)}">${fmtMS(S.loi)}</td></tr></table></div>
       <table class="preview" style="margin-top:8px">
         <tr><td>${S.du >= 0 ? 'Dư so với số cần' : 'Còn thiếu'}</td><td class="n ${S.du >= 0 ? '' : 'neg'}">${fmtM(Math.abs(S.du))}</td></tr>

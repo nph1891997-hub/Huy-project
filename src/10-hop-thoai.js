@@ -60,39 +60,40 @@ function dlgLot(lot, prefill) {
       const n = Math.floor(parseN(f.so_mon.value)), wd = readW(f, 'w'), tong = parseM(f.tong.value);
       let loai = f.loai.value;
       if (!isEdit) dlgDate(f);
-      if (!f.ngay.value) return alert('Chưa nhập ngày mua.'), false;
-      if (n < 1) return alert('Số món phải từ 1 trở lên.'), false;
-      if (wd < 1) return alert('Chưa nhập trọng lượng mỗi món.'), false;
-      if (tong <= 0) return alert('Chưa nhập giá mua.'), false;
-      if (loai === '__new' && !f.ten_moi.value.trim()) return alert('Chưa nhập tên loại vàng mới.'), false;
-      if (isEdit && n < soldMon(lot.id)) return alert('Lô đã bán ' + soldMon(lot.id) + ' món, số món không được nhỏ hơn.'), false;
-      if (isEdit && D.vang.ban.some(b => b.lo_id === lot.id && b.ngay < f.ngay.value)) return alert('Ngày mua không được sau ngày của các lần bán.'), false;
-      if (f.ngay.value > today()) return alert('Ngày mua không được sau hôm nay.'), false;
-      if (!(parseN(f.kv.value) > 0)) return alert('% kỳ vọng phải lớn hơn 0.'), false;
-      if (parseN(f.sd.value) < 0) return alert('Mức báo sắp đạt không được âm.'), false;
+      if (!f.ngay.value) return tell('Chưa nhập ngày mua.'), false;
+      if (n < 1) return tell('Số món phải từ 1 trở lên.'), false;
+      if (wd < 1) return tell('Chưa nhập trọng lượng mỗi món.'), false;
+      if (tong <= 0) return tell('Chưa nhập giá mua.'), false;
+      if (loai === '__new' && !f.ten_moi.value.trim()) return tell('Chưa nhập tên loại vàng mới.'), false;
+      if (isEdit && n < soldMon(lot.id)) return tell('Lô đã bán ' + soldMon(lot.id) + ' món, số món không được nhỏ hơn.'), false;
+      if (isEdit && D.vang.ban.some(b => b.lo_id === lot.id && b.ngay < f.ngay.value)) return tell('Ngày mua không được sau ngày của các lần bán.'), false;
+      if (f.ngay.value > today()) return tell('Ngày mua không được sau hôm nay.'), false;
+      if (!(parseN(f.kv.value) > 0)) return tell('% kỳ vọng phải lớn hơn 0.'), false;
+      if (parseN(f.sd.value) < 0) return tell('Mức báo sắp đạt không được âm.'), false;
       const unitSel = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet;
       const ntRaw = f.nt.disabled || $('#ntField').classList.contains('hidden') ? String(lot.nhac_tut_pct ?? '') : f.nt.value.trim();
       if (ntRaw !== '' && (!isEdit || parseN(ntRaw) !== lot.nhac_tut_pct)) {   // chỉ xét khi đặt mức mới
         const nt = parseN(ntRaw), p = loai === '__new' ? null : latestPrice(loai);
-        if (!(nt > 0)) return alert('Mức nhắc khi lời tụt phải lớn hơn 0, hoặc để trống.'), false;
-        if (!p) return alert('Loại vàng này chưa có giá, chưa đặt được mức nhắc.'), false;
+        if (!(nt > 0)) return tell('Mức nhắc khi lời tụt phải lớn hơn 0, hoặc để trống.'), false;
+        if (!p) return tell('Loại vàng này chưa có giá, chưa đặt được mức nhắc.'), false;
         const g = p.mua_vao / (tong / (n * wd / UNIT_DEM[unitSel])) - 1;
-        if (nt >= g * 100) return alert(`Mức nhắc phải thấp hơn lời hiện tại (${fmtP(g)}), hoặc để trống.`), false;
+        if (nt >= g * 100) return tell(`Mức nhắc phải thấp hơn lời hiện tại (${fmtP(g)}), hoặc để trống.`), false;
       }
       if (isEdit && soldMon(lot.id) > 0 && loai !== '__new' && typeById(loai)?.don_vi_niem_yet !== typeById(lot.loai_id)?.don_vi_niem_yet)
-        return alert('Lô đã có lần bán tính giá theo ' + UNIT_NAME[typeById(lot.loai_id)?.don_vi_niem_yet] + ', không đổi sang loại vàng có đơn vị niêm yết khác được.'), false;
+        return tell('Lô đã có lần bán tính giá theo ' + UNIT_NAME[typeById(lot.loai_id)?.don_vi_niem_yet] + ', không đổi sang loại vàng có đơn vị niêm yết khác được.'), false;
       if (isEdit && soldMon(lot.id) > 0 && loai === '__new' && f.dv_moi.value !== typeById(lot.loai_id)?.don_vi_niem_yet)
-        return alert('Lô đã có lần bán, loại mới phải cùng đơn vị niêm yết với loại cũ.'), false;
+        return tell('Lô đã có lần bán, loại mới phải cùng đơn vị niêm yết với loại cũ.'), false;
       { // chống gõ nhầm đơn giá (nhầm giá lượng/chỉ, thừa/thiếu số 0) với lô mua gần đây
         const unit = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet, p = loai === '__new' ? null : latestPrice(loai);
         const dg = tong / (n * wd / UNIT_DEM[unit]);
         if (p && p.ban_ra && f.ngay.value >= p.ngay && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
-          !confirm(`Đơn giá ${fmtM(dg)}/${UNIT_NAME[unit]} lệch ${fmtP(dg / p.ban_ra - 1)} so với giá tiệm bán ra ngày ${fmtD(p.ngay)} (${fmtM(p.ban_ra)}). Giá này có đúng không?`)) return false;
+          !ask(`Đơn giá ${fmtM(dg)}/${UNIT_NAME[unit]} lệch ${fmtP(dg / p.ban_ra - 1)} so với giá tiệm bán ra ngày ${fmtD(p.ngay)} (${fmtM(p.ban_ra)}). Giá này có đúng không?`)) return false;
       }
       const lim = D.tham_so.vang_han_muc_von;
-      if (!isEdit && lim) {
-        const after = openLots().reduce((a, l) => a + lotState(l).V, 0) + tong;
-        if (after > lim && !confirm(`Vốn đang giữ sẽ lên ${fmtTr(after)}, vượt hạn mức ${fmtTr(lim)}. Vẫn lưu?`)) return false;
+      if (lim) {   // thêm lô, hoặc sửa lô làm vốn đang giữ tăng lên: hỏi khi vượt hạn mức
+        const held = openLots().reduce((a, l) => a + lotState(l).V, 0), left = n - (isEdit ? soldMon(lot.id) : 0);
+        const before = isEdit ? lotState(lot).V : 0, after = held - before + left * tong / n;
+        if (after > lim && after > held + 0.5 && !ask(`Vốn đang giữ sẽ lên ${fmtTr(after)}, vượt hạn mức ${fmtTr(lim)}. Vẫn lưu?`)) return false;
       }
       if (loai === '__new') {
         loai = 't' + Date.now().toString(36);
@@ -170,13 +171,13 @@ function dlgSale(lotId, sale) {
     f => {
       const k = Math.floor(parseN(f.k.value)), gia = parseM(f.gia.value);
       if (!sale) dlgDate(f);
-      if (!f.ngay.value) return alert('Chưa nhập ngày bán.'), false;
-      if (f.ngay.value < lot.ngay_mua) return alert('Ngày bán không được trước ngày mua.'), false;
-      if (f.ngay.value > today()) return alert('Ngày bán không được sau hôm nay.'), false;
-      if (k < 1 || k > maxN) return alert('Số món bán phải từ 1 đến ' + maxN + '.'), false;
-      if (gia <= 0) return alert('Chưa nhập giá bán.'), false;
+      if (!f.ngay.value) return tell('Chưa nhập ngày bán.'), false;
+      if (f.ngay.value < lot.ngay_mua) return tell('Ngày bán không được trước ngày mua.'), false;
+      if (f.ngay.value > today()) return tell('Ngày bán không được sau hôm nay.'), false;
+      if (k < 1 || k > maxN) return tell('Số món bán phải từ 1 đến ' + maxN + '.'), false;
+      if (gia <= 0) return tell('Chưa nhập giá bán.'), false;
       if (!sale && s.P && Math.abs(gia / s.P - 1) > 0.15 &&
-        !confirm(`Giá bán ${fmtM(gia)}/${unit} lệch ${fmtP(gia / s.P - 1)} so với giá tiệm mua vào gần nhất (${fmtM(s.P)}). Giá này có đúng không?`)) return false;
+        !ask(`Giá bán ${fmtM(gia)}/${unit} lệch ${fmtP(gia / s.P - 1)} so với giá tiệm mua vào gần nhất (${fmtM(s.P)}). Giá này có đúng không?`)) return false;
       const data = { ngay: f.ngay.value, so_mon: k, gia_ban: gia, gia_mua_lai: parseM(f.mua_lai.value) || null, ghi_chu: f.ghi_chu.value.trim() };
       if (sale) Object.assign(sale, data);
       else {
@@ -201,7 +202,7 @@ function dlgSale(lotId, sale) {
     const b = e.target.closest('[data-fill]'); if (!b) return;
     const f = $('#dlgForm'), gia = parseM(f.gia.value);
     const st = { n: maxN, V: maxN * s.costMon, valMon: s.w * (gia || s.P || 0) };
-    if (b.dataset.fill === 'von' && !st.valMon) return alert('Nhập giá bán trước.');
+    if (b.dataset.fill === 'von' && !st.valMon) return tell('Nhập giá bán trước.');
     f.k.value = sellK[b.dataset.fill](st);
     f.dispatchEvent(new Event('input'));
   });
@@ -225,8 +226,8 @@ function dlgHold(lotId) {
     <div class="dlg-actions"><button value="cancel" type="submit">Hủy</button><button class="primary" type="submit">${tiep ? 'Giữ tiếp' : 'Lưu mục tiêu mới'}</button></div>`,
     f => {
       const kv = parseN(f.kv.value), ntRaw = f.nt.value.trim(), nt = ntRaw === '' ? null : parseN(ntRaw);
-      if (!(kv > gp)) return alert('Mục tiêu mới phải cao hơn mức lời hiện tại (' + fmtP(s.g) + ').'), false;
-      if (nt != null && (!(nt > 0) || nt >= gp)) return alert('Mức nhắc phải lớn hơn 0 và thấp hơn mức lời hiện tại (' + fmtP(s.g) + '), hoặc để trống.'), false;
+      if (!(kv > gp)) return tell('Mục tiêu mới phải cao hơn mức lời hiện tại (' + fmtP(s.g) + ').'), false;
+      if (nt != null && (!(nt > 0) || nt >= gp)) return tell('Mức nhắc phải lớn hơn 0 và thấp hơn mức lời hiện tại (' + fmtP(s.g) + '), hoặc để trống.'), false;
       lot.ky_vong_pct = kv; lot.nhac_tut_pct = nt;
       commit((tiep ? 'giữ tiếp lô ' : 'nâng mục tiêu lô ') + lot.id);
     },

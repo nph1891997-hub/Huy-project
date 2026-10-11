@@ -35,5 +35,13 @@ exports.run = async (browser, chk) => {
   await T.click(p, 'lot-add'); await p.locator('#dlgForm [name=so_mon]').press('Enter'); await p.waitForTimeout(80);
   eq(await T.dlgOpen(p), false, 'Enter = Lưu'); eq((await T.D(p)).vang.lo.length, 2, 'lô đã thêm');
   await p.keyboard.press('Control+z'); await p.waitForTimeout(80); eq((await T.D(p)).vang.lo.length, 1, 'Ctrl+Z hoàn tác');
+  // Hộp hỏi hiện giữa lúc bấm chuột nuốt mất sự kiện thả chuột: màn hình vẫn phải vẽ lại theo giá vừa lưu
+  const box = await p.locator('#homRest').boundingBox();
+  await mv.fill('230'); await mv.dispatchEvent('input');
+  await p.mouse.move(box.x + 5, box.y + 5); await p.mouse.down();   // rời dòng bằng cú bấm, hộp hỏi lệch 15% hiện ra, không thả chuột
+  await p.waitForTimeout(300);
+  eq(await gia('2026-10-11'), 230000000, 'giá lưu sau hộp hỏi');
+  has(await T.text(p, '#homRest'), '+76,9%', 'màn hình vẽ lại dù không có sự kiện thả chuột');
+  await p.mouse.up();
   noErr(p, 'lỗi JS'); return fails;
 };

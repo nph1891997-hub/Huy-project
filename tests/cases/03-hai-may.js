@@ -12,7 +12,7 @@ exports.run = async (browser, chk) => {
   has(await T.app(pa), 'Mở lại tai-san.json', 'màn chờ khi chưa cấp quyền'); eq(await T.status(pa), 'Chưa mở file dữ liệu', 'trạng thái màn chờ');
   const mod0 = disk.get('tai-san.json').mod;
   await T.click(pa, 'file-reconnect'); await pa.waitForTimeout(100);
-  eq(await T.status(pa), 'Đã mở tai-san.json', 'A mở lại'); eq(disk.get('tai-san.json').mod, mod0, 'mở lại không ghi file (A13)');
+  has(await T.status(pa), 'Đã mở tai-san.json · sửa lần cuối', 'A mở lại'); eq(disk.get('tai-san.json').mod, mod0, 'mở lại không ghi file (A13)');
   const pb = await B.open({ time: '2026-10-11T09:01:00+07:00', perm: { query: 'granted' } });
   eq(disk.get('tai-san.json').mod, mod0, 'B tự mở cũng không ghi file');
   await T.sell(pb, 'V-2026-001', { k: 1, gia: '160' }); await pb.waitForTimeout(100);
@@ -40,7 +40,7 @@ exports.run = async (browser, chk) => {
   eq((await T.D(pb)).vang.gia.find(p => p.ngay === '2026-10-11').mua_vao, 157000000, 'tab 1 nạp giá tab 2 vừa lưu');
   // Tải lại A: không ghi, không tải về gì
   const pa2 = await A.open({ time: '2026-10-11T09:20:00+07:00', perm: { query: 'granted' } });
-  eq(await T.status(pa2), 'Đã mở tai-san.json', 'A tải lại'); eq((await T.dl(pa2)).length, 0, 'không tải về gì khi bản trình duyệt khớp file');
+  has(await T.status(pa2), 'Đã mở tai-san.json · sửa lần cuối', 'A tải lại'); eq((await T.dl(pa2)).length, 0, 'không tải về gì khi bản trình duyệt khớp file');
   ok([pa, pb, pb2, pa2].every(p => !p.__log.errors.length), 'không lỗi JS');
   return fails;
 };
