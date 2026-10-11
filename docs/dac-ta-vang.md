@@ -1,11 +1,73 @@
 # Đặc tả: App quản lý vàng
 
-> Trạng thái: **đã duyệt, đã làm bản đầu tiên (`index.html`)** · Ngày: 2026-10-11
+> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22) · Ngày: 2026-10-11
+
+## Sửa sau buổi review 🔧
+
+Review lại code bản 🆕 và giả lập 15 tình huống dùng thật: lần đầu dùng, nhập giá hằng ngày, bán, giữ, mua thêm, cần tiền, nhập bù giá, mở 2 tab, điện thoại, dữ liệu 20 năm. Kết quả chia ba nhóm.
+
+**A. Lỗi**
+
+| # | Lỗi | Cách sửa | Mục |
+|---|---|---|---|
+| A1 | Mở app ở 2 tab, hoặc để tab cũ mở trên máy khác: tab cũ ghi đè file, mất lần bán ghi ở tab/máy kia, không báo gì | Một phép kiểm tra "nơi lưu có bị sửa ở nơi khác không", chạy lúc quay lại tab và trước mỗi lần lưu | 0 |
+| A2 | Nhấn Enter trong hộp Thêm lô / Bán thì hộp đóng mà không lưu | Enter = nút chính (Lưu, Xác nhận bán), Esc = Hủy | 2 |
+| A3 | Giá gõ dở (chưa bấm Cập nhật) bị mất khi Bán… hay Mua… rồi lưu; hộp Bán điền giá cũ; lô vừa mua bị tính theo giá hôm qua | **Lưu khi rời dòng giá**, bỏ nút Cập nhật: không còn giá gõ dở để mất | 2.1a |
+| A4 | File dữ liệu hỏng (JSON lỗi) → trang trắng, không còn nút nào | Mở file lỗi thì quay về màn chờ, báo lý do, có Mở file khác… | 0 |
+| A5 | Bộ nhớ trình duyệt đầy mà file vẫn ghi được → mốc đồng bộ sai → lần mở sau bản cũ trong trình duyệt ghi đè file | Mốc chỉ cập nhật khi cả bộ nhớ trình duyệt lẫn file đều lưu được; bộ nhớ lỗi thì xóa mốc để file thắng | 0 |
+| A6 | Form Sửa lô cho đặt mức nhắc cao hơn mức lời → lô +2,7% bị báo "lời tụt dưới mức nhắc 10%" dù chưa từng lên 10%; mức 0% không bao giờ nhắc | Form lô kiểm tra giống hộp Giữ: mức nhắc > 0 và thấp hơn lời hiện tại | 2.2, 3.6 |
+| A7 | Lô lời đúng +15,0% không vào Nên chốt (máy tính ra 14,999…%) | So sánh bỏ qua sai số tính toán | 3.4 |
+| A8 | Xóa ô Ngày lúc đang gõ giá → lỗi, cột Mua thêm? ngừng cập nhật | Ô Ngày trống thì gợi ý tạm tính theo hôm nay | 2.1a |
+| A9 | Màn chờ: "Tạo file mới…" mà chọn trùng `tai-san.json` cũ → ghi đè file bằng bản cũ trong trình duyệt | Chọn trúng file đã có dữ liệu thì coi như mở file đó, đối chiếu, không ghi đè | 0 |
+| A10 | Chế độ xem: "Xem với giá này" không tính lại phương án Cần tiền đang mở | Chế độ xem cũng "rời dòng là tính lại", tính lại mọi phần kể cả phương án | 2.8 |
+
+**B. Gợi ý chưa thông minh**
+
+| # | Vấn đề | Cách sửa | Mục |
+|---|---|---|---|
+| B1 | Cùng loại SJC vừa Nên chốt (lô cũ +22,5%) vừa 🟢 Vùng mua; làm theo cả hai là bán rồi mua lại, mất chênh lệch 2 lần | Kết quả mới 🟡 **Cân nhắc**: "đang có lô nên chốt cùng loại" | 2.1e, 3.5 |
+| B2 | Thẻ 🔁 Có thể mua lại hiện, mà cột Mua thêm? cùng loại ghi ⚪ Chưa tới | Mua thêm? xét luôn giá muốn mua lại bạn đặt khi bán: chạm thì 🟢 **Mua lại** | 2.1e, 3.5 |
+| B3 | Tiệm nới chênh lệch (hạ mua vào, giữ bán ra): lô lỗ −4,8% vẫn bị coi là "lỗ chênh lệch", nằm trong nhóm Giữ thu gọn, trong khi cột Mua thêm? cùng lúc báo chênh lệch cao bất thường | Chỉ coi là lỗ chênh lệch khi chênh lệch hôm nay bình thường | 2.1b, 3.4 |
+| B4 | Hạn mức: 🟢 "còn 47tr ≈ 3 chỉ" dù quen mua miếng 1 lượng 149,5tr; mua vượt hạn mức (852tr / 600tr) không cảnh báo | 🟢 chỉ khi còn đủ tiền cho 1 món quen; lưu lô vượt hạn mức thì hỏi lại; dòng tổng hiện vốn / hạn mức | 2.1d, 2.1e, 2.2 |
+| B5 | Nhắc tụt không biết giá lên hay xuống: rơi xuống lỗ rồi hồi lên +20% vẫn ghi "lời tụt về +20%"; rơi thẳng từ +30% xuống dưới 0 thì bỏ qua nhắc | Dòng nhắc ghi đỉnh lời kể từ khi mua; vẫn nhắc khi đã tụt xuống lỗ | 2.1b, 3.4 |
+| B6 | Mấy ngày đầu, ô Mua thêm? không cho biết dữ liệu còn ít (mới 1 ngày giá đã ghi "còn cách 5%") | Ghi "(mới có N ngày giá)" ngay trong ô | 2.1e |
+| B7 | Mốc rải tính cả lô đã bán hết | Chỉ xét lô còn đang giữ | 3.5 |
+
+**C. Luồng chưa hiệu quả**
+
+| # | Vấn đề | Cách sửa | Mục |
+|---|---|---|---|
+| C1 | Nhập bù giá nhiều ngày: sau mỗi lần Cập nhật ô Ngày nhảy về hôm nay; ô giá điền giá mới nhất chứ không phải giá trước ngày đó; loại có giá trùng bị bỏ qua mà ô Không đổi không hiện cho ngày cũ | Ô Ngày giữ ngày vừa nhập (kèm dòng vàng, nút Về hôm nay); ô giá điền theo ngày đang chọn; ô Không đổi hiện cả cho ngày cũ | 2.1a |
+| C2 | Cột Mua thêm? tính theo giá vừa gõ, còn nhóm lô vẫn theo giá đã lưu: một màn hình, hai giá | Cùng cách sửa A3: rời dòng là lưu, mọi phần tính lại theo giá mới | 2.1a |
+| C3 | Dữ liệu 20 năm: mỗi lần vẽ lại mất ~180 ms, phần lớn để vẽ các dòng trong nhóm đang thu gọn | Nhóm thu gọn và phần Vì sao? chỉ vẽ, chỉ tính khi bấm mở | 2.1a, 2.1b |
+
+**Rà lại cho gọn.** Bản 🔧 đầu tiên vá từng lỗi riêng, nên có chỗ chồng cơ chế. Đã gộp lại:
+
+| Chỗ | Bản đầu | Bản gọn | Vì sao |
+|---|---|---|---|
+| A3, C2, A10 | 3 cơ chế: giữ giá gõ dở, xem trước nhóm lô theo giá gõ dở, tự lưu giá trước khi mở hộp thoại | 1 quy tắc: **rời dòng giá là lưu**, bỏ nút Cập nhật | Hết hẳn khái niệm "giá gõ dở", nên cả ba lỗi không còn chỗ xảy ra; mỗi ngày bớt một lần bấm |
+| A1 | 3 chốt: tự nạp lại khi tab khác lưu, kiểm tra khi quay lại tab, kiểm tra trước khi ghi file | 1 phép kiểm tra chạy ở 2 thời điểm: quay lại tab và trước mỗi lần lưu | Cùng một phép kiểm tra phủ cả nhiều tab lẫn nhiều máy, phủ luôn lúc chưa kết nối file; không cần cơ chế báo qua lại giữa các tab, không đóng ngang hộp thoại đang mở |
+| A6, B5 | Thêm khái niệm "mức nhắc đã chạy" và trường dữ liệu mới `nhac_tut_tu` | Kiểm tra mức nhắc < lời hiện tại ở mọi chỗ đặt; đỉnh lời tính từ ngày mua | Đặt đúng thì mức nhắc luôn "đã chạy" sẵn; không thêm trường dữ liệu, file không đổi cấu trúc |
+
+## Sửa sau buổi dùng thử 🆕
+
+Dùng thử app với 4 lô (SJC miếng và nhẫn 9999), nhập giá 2 ngày, giữ lô, bán, cần tiền, mở trên điện thoại. Sáu chỗ bị cấn:
+
+| # | Chỗ cấn khi dùng thử | Cách sửa | Mục |
+|---|---|---|---|
+| 1 | Trọng lượng điền sẵn bị cộng dồn: ô chỉ có sẵn `1`, gõ `1` vào ô lượng thành **1 lượng 1 chỉ** mỗi món. Kiểm tra 15% không bắt được, lời hiện sai cả chục % | Loại chưa có lô thì điền sẵn 1 đơn vị niêm yết; gõ vào một ô thì phần điền sẵn ở các ô khác tự xóa; trọng lượng hiện chữ đậm | 2.2 |
+| 2 | Giữ, nâng mục tiêu xong mà giá tụt thì lô lặng lẽ vào nhóm Giữ đang thu gọn, phần lời mất dần không ai nhắc | Thêm mức **nhắc chốt khi lời tụt về**; tụt dưới mức đó thì lô quay lại nhóm Nên chốt | 2.1b, 3.4 |
+| 3 | Loại vàng giá không đổi vẫn bị báo "chưa cập nhật hôm nay", kéo theo cảnh báo giá cũ ở hộp Bán và tab Cần tiền | Ô tick **Không đổi** ở từng dòng giá | 2.1a |
+| 4 | Lô vừa mua nằm trong nhóm 🔴 Đang lỗ (do chênh lệch mua–bán), nhóm đỏ lúc nào cũng có lô nên dễ quen mắt, bỏ sót lô lỗ thật | Lỗ chỉ do chênh lệch thì vào nhóm Giữ; nhóm Đang lỗ chỉ còn lô mà giá đã giảm so với lúc mua | 2.1b, 3.4 |
+| 5 | Chưa mở lại file vẫn xem và sửa được trên bản cũ trong trình duyệt; dùng 2 máy thì dễ bấm OK ghi đè, mất các lần bán ghi ở máy kia | Chưa mở file thì không hiện số liệu; tự đối chiếu bản trình duyệt với file, không hỏi OK/Hủy, bản bị thay thì tự tải về | 0 |
+| 6 | App chỉ quản lý lời lỗ, nhập giá hôm nay xong không biết **có nên mua thêm không**; trên điện thoại phải cuộn ngang | Cột **Mua thêm?** ở bảng giá theo quy tắc mua rải khi giá giảm (giảm từ đỉnh 90 ngày, cách lần mua trước, chênh lệch mua–bán, hạn mức vốn), kèm biểu đồ 90 ngày; màn hình hẹp xếp dạng thẻ | 2.1a, 2.1e, 3.5, 2.8 |
+
+Điểm 6 đổi quyết định cũ ở mục 5: nay có gợi ý mua thêm và biểu đồ giá.
 
 ## 0. Nguyên tắc chung
 
 - **Một file `index.html` duy nhất**, mở bằng Chrome/Edge trên máy tính là chạy. Không build, không cài đặt, không server.
-- **App không đoán giá.** Mọi gợi ý chỉ dựa trên mục tiêu bạn tự đặt và giá bạn tự nhập. Quyết định cuối cùng là của bạn.
+- **App không đoán giá.** Gợi ý bán dựa trên mục tiêu bạn tự đặt cho từng lô; 🆕 gợi ý mua dựa trên quy tắc mua rải bạn tự đặt (giảm bao nhiêu từ đỉnh thì mua, hạn mức vốn). Tất cả chỉ áp vào giá bạn tự nhập. Quyết định cuối cùng là của bạn.
 - **Chỉ tập trung vào vàng.** Tiết kiệm và chứng chỉ tiền gửi đã có app ngân hàng theo dõi. So sánh với gửi ngân hàng dùng ô lãi suất trong Tham số.
 - **Tiêu chí thêm tính năng:** chỉ thêm khi nó giúp luồng dùng hằng ngày (nhập giá → xem lô nên chốt → bán hoặc giữ → thỉnh thoảng mua thêm hoặc cần tiền) và không bắt người dùng nhập hay đọc thêm.
 
@@ -17,7 +79,31 @@
 | **Dự phòng** | Đồng thời lưu một bản trong trình duyệt, phòng khi chưa chọn file. |
 | **Sao lưu** | Tab Tham số → thẻ **Dữ liệu**: Tạo file mới, Mở file khác, **Tải bản sao lưu**, **Khôi phục từ bản sao lưu**. |
 
-Chưa kết nối file thì đầu trang hiện **một dòng nhắc** kèm nút (Mở lại file / Tạo file dữ liệu). Đầu trang không đặt nút dữ liệu nào khác để giữ gọn.
+Chưa từng chọn file thì đầu trang hiện **một dòng nhắc** kèm nút Tạo file dữ liệu / Mở file có sẵn. Đầu trang không đặt nút dữ liệu nào khác để giữ gọn.
+
+🆕 **Mở lại file mỗi lần dùng.** App nhớ file đã chọn, nhưng mỗi lần mở, trình duyệt thường hỏi lại quyền. Trong lúc chưa mở được file, app **không hiện số liệu**, chỉ hiện nút lớn **Mở lại tai-san.json** (kèm Mở file khác… / Tạo file mới…). Lý do: bản trong trình duyệt có thể cũ hơn file (vừa sửa trên máy khác); xem số cũ dễ quyết định sai, sửa trên số cũ thì dễ ghi đè.
+
+🆕 **Đối chiếu khi mở file.** Trình duyệt nhớ thời điểm lần cuối đọc hoặc ghi file thành công (mốc đồng bộ, lưu trong trình duyệt, không nằm trong file). Khi mở file, app tự xử lý, **không hỏi OK/Hủy**:
+
+| Bản trong trình duyệt | File | App làm gì |
+|---|---|---|
+| Không có thay đổi sau mốc đồng bộ | (bất kỳ) | Dùng dữ liệu trong file |
+| Có thay đổi chưa ghi vào file (ví dụ lần trước ghi file bị lỗi) | Không đổi kể từ mốc đồng bộ | Ghi bản trình duyệt vào file |
+| Có thay đổi chưa ghi vào file | Cũng đã đổi (sửa ở máy khác) | Dùng dữ liệu trong file; bản trình duyệt tự tải về thành `ban-trinh-duyet-<ngày>-<giờ>.json` và báo một dòng. Cần lấy lại thì dùng **Khôi phục từ bản sao lưu** |
+
+Bỏ hộp hỏi cũ "Dữ liệu trong trình duyệt MỚI HƠN… OK = ghi đè vào file": bấm OK theo phản xạ là mất các thay đổi ở máy kia.
+
+🔧 **Nhiều tab, nhiều máy.** Đối chiếu lúc mở file chưa đủ: một tab (hay một máy) để mở từ trước vẫn giữ bản cũ, ghi vào là đè mất thay đổi ở nơi khác. Sửa bằng **một phép kiểm tra**: "nơi lưu có bị sửa ở nơi khác kể từ lần tab này đọc hoặc ghi cuối không". Nơi lưu là file `tai-san.json`; chưa kết nối file thì là bản trong trình duyệt.
+
+- **Cách kiểm tra cho nhẹ**: xem thời điểm sửa của file, không đọc lại cả file. Thời điểm khác thì mới đọc file để so dấu cập nhật bên trong (`cap_nhat`), tránh báo nhầm khi OneDrive/Drive chỉ chạm vào file lúc đồng bộ mà nội dung không đổi.
+- **Chạy lúc quay lại tab hoặc cửa sổ** (chuyển tab, chuyển cửa sổ, mở máy lên lại): bị sửa thì nạp lại ngay, báo một dòng "Dữ liệu vừa được cập nhật ở nơi khác", trước khi bạn kịp thao tác trên số cũ.
+- **Chạy trước mỗi lần lưu**: phòng khi tab vẫn đang được chọn suốt mà máy khác đã sửa file. Bị sửa thì **không ghi đè**: app nạp dữ liệu trong file, tải bản trình duyệt về như dòng cuối bảng trên, và báo "Thay đổi vừa rồi chưa được lưu vì file đã được sửa ở nơi khác. App đã nạp dữ liệu mới, hãy làm lại thao tác."
+
+🔧 **Mốc đồng bộ chỉ cập nhật khi lưu trọn vẹn**: cả bản trong trình duyệt lẫn file đều ghi thành công. Bộ nhớ trình duyệt đầy (ghi lỗi) thì app xóa mốc, để lần mở sau dùng dữ liệu trong file, và báo một lần "Bộ nhớ trình duyệt đầy; dữ liệu vẫn được lưu vào file."
+
+🔧 **Mở file lỗi không bao giờ để trang trắng**: file không đọc được, không phải JSON, hoặc không đúng dữ liệu của app thì quay về màn chờ mở file, báo lý do ngay trên màn chờ, kèm Mở file khác… / Tạo file mới…. Lỗi xảy ra lúc khởi động cũng vậy.
+
+🔧 **Tạo file mới… mà chọn trúng một file đã có dữ liệu** (ví dụ chọn lại đúng `tai-san.json`): app coi như **mở** file đó và đối chiếu như bảng trên, không ghi đè.
 
 Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hướng dẫn 2 bước: tạo file dữ liệu, rồi thêm lô đầu tiên.
 
@@ -43,17 +129,30 @@ Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hư�
 
 Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch sử · Tham số**. Góc phải: trạng thái lưu.
 
+🔧 **Bàn phím**: trong hộp thoại, Enter ở bất kỳ ô nào = bấm nút chính (Lưu, Xác nhận bán, Lưu mục tiêu mới), Esc = Hủy. Trước đây Enter bấm nhầm nút Hủy (nút đứng trước) nên hộp đóng mà không lưu gì. Ở bảng giá, Enter = lưu dòng đó và chuyển xuống ô mua vào của dòng dưới, nhập nhiều loại chỉ cần gõ số rồi Enter.
+
 ### 2.1 Tab "Hôm nay" (màn hình chính)
 
 **a) Bảng nhập giá**: mỗi loại vàng một dòng.
 
-| Loại | Đơn vị niêm yết | Tiệm mua vào | Tiệm bán ra | Mua hôm nay cần tăng để hòa vốn |
-|---|---|---|---|---|
-| SJC miếng | lượng | `[ ô nhập ]` | `[ ô nhập ]` | +1,7% (= bán ra ÷ mua vào − 1) |
+| Loại | Đơn vị niêm yết | Tiệm mua vào | Tiệm bán ra | Mua hôm nay cần tăng để hòa vốn | 🆕 Mua thêm? | 🆕 Không đổi |
+|---|---|---|---|---|---|---|
+| SJC miếng | lượng | `[ ô nhập ]` | `[ ô nhập ]` | +1,6% (= bán ra ÷ mua vào − 1) | ⚪ mua khi bán ra ≤ 149,6tr | ☐ |
 
-- Ngày mặc định là hôm nay, sửa được (để nhập lại giá ngày cũ).
-- Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi. Loại nào giá chưa cập nhật hôm nay thì dòng "giá ngày …" hiện màu vàng.
-- Bấm **Cập nhật**: **chỉ lưu những loại có giá thay đổi**, loại không sửa vẫn giữ ngày cũ (để không tưởng nhầm giá cũ là giá hôm nay). Không loại nào thay đổi thì hỏi có ghi nhận "giá không đổi" cho ngày đó không.
+- Ngày mặc định là hôm nay, sửa được (để nhập lại giá ngày cũ hoặc nhập bù).
+  - 🔧 Đang chọn ngày khác hôm nay thì ô Ngày có nền vàng, kèm dòng "Đang nhập giá cho ngày 09/10 (không phải hôm nay)" và nút **Về hôm nay**.
+  - 🔧 Lưu xong giá một ngày cũ, ô Ngày **giữ nguyên** ngày đó (trước đây nhảy về hôm nay), để nhập bù nhiều ngày khỏi chọn lại từ đầu. Mở lại app thì ô Ngày luôn về hôm nay.
+  - 🔧 Ô Ngày đang trống hoặc chưa hợp lệ thì cột Mua thêm? tạm tính theo hôm nay; rời dòng giá thì báo "Chưa nhập ngày", chưa lưu.
+- Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi. 🔧 Chính xác là: giá **của ngày đang chọn** nếu ngày đó đã có giá; chưa có thì giá gần nhất **trước** ngày đó (chọn ngày cũ để nhập bù thì không bị điền giá mới hơn). Việc xét "giá có thay đổi không" và kiểm tra lệch 15% đều so với giá điền sẵn này. Loại nào giá chưa cập nhật hôm nay thì dòng "giá ngày …" hiện màu vàng.
+- 🔧 **Lưu khi rời dòng** (thay nút Cập nhật giá):
+  - Sửa giá xong, **rời khỏi dòng đó** (bấm sang dòng khác, bấm chỗ khác, mở hộp thoại, chuyển tab) hoặc nhấn Enter thì dòng được lưu cho ngày đang chọn, cùng các kiểm tra như trước (lệch 15%, bán ra thấp hơn mua vào). Chuyển giữa ô mua vào và ô bán ra trong cùng một dòng thì chưa lưu.
+  - Chỉ lưu khi giá khác giá điền sẵn; loại không sửa vẫn giữ ngày cũ (để không tưởng nhầm giá cũ là giá hôm nay).
+  - Kiểm tra hỏi lại mà bấm Hủy thì dòng trở về giá điền sẵn, không lưu. Mỗi dòng lưu là một bước hoàn tác ("↶ Hoàn tác: giá SJC ngày 11/10").
+  - Lưu xong thì mọi phần tính lại theo giá mới: nhóm lô, dòng tổng, hộp Bán, form Thêm lô, tab Cần tiền.
+  - Lý do: trước đây giá gõ mà chưa bấm Cập nhật nằm lơ lửng, gây ba lỗi một lúc: mất khi làm việc khác (A3), nhóm lô và cột Mua thêm? dùng hai giá khác nhau trên cùng màn hình (C2), hộp Bán và form Thêm lô điền giá cũ. Lưu khi rời dòng thì không còn giá lơ lửng, và mỗi ngày bớt một lần bấm. Không lưu theo từng phím vì sẽ lưu cả số đang gõ dở (gõ "15" trên đường tới "156") và hỏi lại liên tục.
+- 🆕 **Không đổi**: dòng nào giá chưa phải của ngày đang chọn thì có ô tick ở cuối dòng (🔧 kể cả khi đang chọn ngày cũ). Xem giá tiệm thấy không đổi thì tick: 🔧 **lưu ngay** giá đang điền sẵn cho ngày đang chọn, dòng hết màu vàng.
+- 🔧 Nút **Tất cả không đổi** (thay hộp hỏi "Giá không đổi so với lần nhập trước…"): hiện khi còn dòng chưa có giá của ngày đang chọn; bấm là ghi nhận giá điền sẵn của mọi dòng đó. Ngày giá đứng yên chỉ cần một lần bấm.
+- 🆕 **Mua thêm?**: gợi ý có nên mua thêm loại này không, tính lại ngay khi gõ giá (🔧 chưa cần rời dòng, chỉ dòng đó đổi theo). Quy tắc ở mục e). Dưới bảng có dòng **Vì sao? · Biểu đồ 90 ngày**, thu gọn mặc định; 🔧 thu gọn thì chưa tính, mở ra mới tính.
 - **Giá tiệm bán ra tự theo**: sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch của lần nhập trước; sửa tay giá bán ra thì app không đụng vào nữa.
 - **Chống gõ nhầm**: giá mua vào lệch quá 15% so với lần trước (thừa/thiếu số 0, nhầm giá lượng với giá chỉ) thì hỏi lại trước khi lưu.
 
@@ -61,22 +160,73 @@ Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch s�
 
 | Nhóm | Điều kiện | Hiển thị thêm |
 |---|---|---|
-| 🟢 **Nên chốt** | `% lời ≥ % kỳ vọng` | Nút **Bán…** (mở hộp thoại bán, có sẵn nút Bán hết / Lấy lại vốn / Bán một nửa) và **Giữ, nâng mục tiêu** |
+| 🟢 **Nên chốt** | `% lời ≥ % kỳ vọng`, 🆕 hoặc **lời tụt dưới mức nhắc** (lô đã giữ, nâng mục tiêu; 🔧 vẫn nhắc khi nay đã lỗ) | Nút **Bán…** (mở hộp thoại bán, có sẵn nút Bán hết / Lấy lại vốn / Bán một nửa) và **Giữ, nâng mục tiêu**. 🆕 Lô tụt ghi rõ mức nhắc, 🔧 kèm đỉnh lời đã đạt: "lời tụt từ +30,0% (02/09) về +16,7%, dưới mức nhắc 25%"; nút thứ hai là **Giữ tiếp** |
 | 🟡 **Sắp đạt** | Chưa đạt, đang lời, và **giá chỉ còn cần tăng ≤ mức báo sắp đạt** | Giá cần tăng bao nhiêu % (lên bao nhiêu) |
-| ⚪ **Giữ** | `0 ≤ % lời` và chưa sắp đạt | — |
-| 🔴 **Đang lỗ** | `% lời < 0` | Lỗ bao nhiêu, giá cần tăng bao nhiêu % để hòa vốn |
+| ⚪ **Giữ** | Đang lời mà chưa sắp đạt, 🆕 hoặc **lỗ chỉ do chênh lệch mua–bán** (giá tiệm bán ra hôm nay vẫn ≥ giá vốn của lô, 🔧 và chênh lệch hôm nay không cao bất thường) | Giá cần tăng bao nhiêu % để đạt mục tiêu. 🆕 Lô lỗ chênh lệch ghi thêm "chưa qua chênh lệch mua–bán" |
+| 🔴 **Đang lỗ** | `% lời < 0` 🆕 và **giá tiệm bán ra hôm nay < giá vốn của lô** (giá đã giảm so với lúc mua), 🔧 hoặc `% lời < 0` khi **chênh lệch hôm nay cao bất thường** | Lỗ bao nhiêu, giá cần tăng bao nhiêu % để hòa vốn. 🔧 Lỗ vì chênh lệch cao thì ghi thêm "tiệm đang nới chênh lệch: 5,3%, thường 1,6%" |
 
 Cột chung cho mọi lô (giữ gọn, chỉ những gì cần để quyết định): số lô và loại, còn lại (món × trọng lượng), vốn còn lại, giá trị hôm nay, lời/lỗ (đ và %), mục tiêu, **so với gửi ngân hàng**.
 
-Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi tiết** của lô (tab Lô vàng). Nhóm ⚪ **Giữ** thu gọn mặc định vì không cần làm gì.
+Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi tiết** của lô (tab Lô vàng). Nhóm ⚪ **Giữ** thu gọn mặc định vì không cần làm gì; 🆕 tên nhóm đổi thành "Giữ — chưa đạt mục tiêu" vì có cả lô lỗ chênh lệch. 🔧 Phần đang thu gọn (nhóm Giữ, Đang chờ giá mua lại, phần Vì sao?) chỉ vẽ, chỉ tính khi bấm mở, để dữ liệu nhiều năm vẫn mượt (với dữ liệu 20 năm, mỗi lần vẽ lại đang mất khoảng 180 ms, phần lớn cho các dòng không ai nhìn).
 
-**Giữ, nâng mục tiêu**: khi quyết định giữ một lô đã đạt mục tiêu, nhập mục tiêu mới (mặc định: mức lời hiện tại làm tròn lên bội số 5%, ví dụ +42,5% → 45%; app hiện giá cần đạt). Lô chuyển sang nhóm Giữ, không bị nhắc lại mỗi ngày cho tới khi đạt mức mới.
+🆕 **Vì sao tách lỗ chênh lệch**: mua xong là lỗ ngay bằng chênh lệch giữa giá tiệm bán ra và mua vào (khoảng 1,5–2,5%). Xếp vào nhóm đỏ thì lô nào mới mua cũng đỏ, nhìn mãi thành quen và bỏ sót lô lỗ thật. Giá tiệm bán ra hôm nay còn ≥ giá vốn nghĩa là mua lại y hệt lô đó hôm nay cũng không rẻ hơn, tức giá chưa giảm; phần lỗ chỉ là chênh lệch, không có gì phải làm. 🔧 Ngoại lệ: tiệm **nới chênh lệch bất thường** (hạ giá mua vào mà giữ giá bán ra, hay gặp lúc thị trường biến động). Khi đó phần lỗ là thật: bán lúc này thiệt hơn hẳn mọi khi. Ví dụ lô mua 157,5tr, tiệm hạ mua vào 155 → 150 nhưng bán ra vẫn 158: lỗ −4,8%, gấp ba chênh lệch thường ngày. Lô như vậy vào Đang lỗ.
+
+**Giữ, nâng mục tiêu**: khi quyết định giữ một lô đã đạt mục tiêu, hộp thoại có 2 ô, dưới mỗi ô app hiện giá tiệm mua vào tương ứng:
+
+| Ô | Mặc định | Ví dụ: lô đang +30%, mục tiêu cũ 15% |
+|---|---|---|
+| Mục tiêu mới | Mức lời hiện tại làm tròn lên bội số 5%, cao hơn ít nhất 1 điểm (+42,5% → 45%) | 35% |
+| 🆕 Nhắc chốt nếu lời tụt về | Mức lời hiện tại làm tròn xuống bội số 5%, thấp hơn ít nhất 1 điểm, không thấp hơn mục tiêu cũ. Để trống = không nhắc | 25% |
+
+Lô chuyển sang nhóm Giữ, không bị nhắc lại mỗi ngày. 🆕 Lô quay lại nhóm **Nên chốt** khi lời đạt mục tiêu mới, **hoặc khi lời tụt dưới mức nhắc**. Lý do: khi dùng thử, lô SJC đang +30% được giữ để chờ 35%, giá rơi còn +16,7% thì lô nằm im trong nhóm Giữ đang thu gọn, 32 triệu lời mất mà app không nhắc gì.
+
+🆕 **Giữ tiếp** (lô đang tụt dưới mức nhắc): cùng hộp thoại; mục tiêu giữ nguyên, mức nhắc mặc định tính lại theo mức lời hiện tại (lúc này được thấp hơn mục tiêu cũ), để trống thì thôi nhắc.
+
+🔧 **Mức nhắc**:
+- Ở mọi chỗ đặt (hộp Giữ, form Thêm / Sửa lô), mức nhắc phải **> 0 và thấp hơn lời hiện tại**. Đặt như vậy thì lời đã ở trên mức nhắc ngay từ đầu, nên "lời tụt dưới mức nhắc" luôn có nghĩa là đã từng cao hơn rồi tụt xuống. Không cần thêm trường dữ liệu nào để nhớ "đã chạm mức nhắc chưa".
+- Lời dưới mức nhắc là nhắc, **kể cả khi nay đã lỗ** (giá có thể rơi mạnh giữa hai lần bạn mở app). Nhắc cho tới khi bạn Bán, Giữ tiếp, hoặc bỏ mức nhắc.
+- Dòng nhắc ghi **đỉnh lời kể từ khi mua** (theo giá đã nhập), để khỏi nhầm khi giá đang hồi lên: "lời tụt từ +30,0% (02/09) về +20,0%".
 
 **c) Nhắc mua lại**:
 - **🔁 Có thể mua lại**: các lần bán có `giá tiệm bán ra ≤ giá muốn mua lại`. Nút **Mua lại…** mở form thêm lô điền sẵn loại, số món, trọng lượng, mục tiêu của lô cũ và đơn giá hôm nay; lưu xong thì nhắc tự tắt. Nút **Bỏ nhắc**.
 - **Đang chờ giá mua lại**: các lần bán chưa tới giá, thu gọn mặc định.
 
-**d) Dòng tổng**: tổng vốn đang giữ, tổng giá trị hôm nay, lời tạm tính, lời đã chốt (từ trước đến nay), tổng lời.
+**d) Dòng tổng**: tổng vốn đang giữ, tổng giá trị hôm nay, lời tạm tính, lời đã chốt (từ trước đến nay), tổng lời. 🔧 Có hạn mức vốn thì ô Vốn đang giữ ghi thêm "/ hạn mức 600tr · còn 47tr".
+
+**e) Gợi ý mua thêm** 🆕
+
+App không đoán giá lên hay xuống. Gợi ý mua là **quy tắc mua rải khi giá giảm** do bạn đặt ở Tham số, áp vào giá bạn nhập. Phía mua dùng **giá tiệm bán ra** (giá bạn phải trả); phía bán (các nhóm lô ở mục b) vẫn dùng giá tiệm mua vào như cũ.
+
+- **Vùng mua**: giá tiệm bán ra thấp hơn **đỉnh 90 ngày** ít nhất X% (Tham số, mặc định 5%).
+- **Mua rải, không dồn**: trong 90 ngày đã mua loại này rồi thì lần tiếp theo phải rẻ hơn lần mua gần nhất ít nhất X% nữa. Giá cứ giảm thì các lần mua cách nhau X%, không phải ngày nào cũng hiện "nên mua".
+- **Không mua lúc chênh lệch cao bất thường**: lúc thị trường biến động, tiệm hay hạ giá mua vào mà giữ giá bán ra; mua lúc đó phải chờ giá tăng nhiều hơn mới hòa vốn.
+- **Hạn mức vốn** (Tham số, để trống = không giới hạn): tổng vốn đang giữ trong vàng đã chạm hạn mức thì thôi gợi ý mua. 🔧 Phần còn lại không đủ mua **1 món quen** (trọng lượng mỗi món của lô gần nhất cùng loại) cũng tính là đủ hạn mức.
+- 🔧 **Giá bạn đặt khi bán cũng là một mốc**: tiệm bán ra chạm "giá muốn mua lại" của một lần bán loại này thì là 🟢 **Mua lại**, khớp với thẻ 🔁 Có thể mua lại ở mục c.
+- 🔧 **Không vừa bán vừa mua**: loại này đang có lô ở nhóm Nên chốt thì không báo 🟢. Bán lô cũ rồi mua lô mới cùng loại cùng lúc là mất chênh lệch mua–bán 2 lần mà số vàng vẫn vậy; nên chọn một: chốt lô cũ, hoặc giữ nó thay cho mua thêm.
+
+Cột **Mua thêm?** hiện một kết quả (công thức ở 3.5), xét theo thứ tự, gặp điều kiện đúng đầu tiên thì dừng:
+
+| Kết quả | Khi nào | Hiện thêm |
+|---|---|---|
+| `nhập giá hôm nay` (màu vàng) | Giá của loại chưa phải của ngày đang chọn (chưa gõ, chưa tick Không đổi) | — |
+| ⛔ **Đủ hạn mức** | Có hạn mức và tổng vốn đang giữ ≥ hạn mức, 🔧 hoặc phần còn lại không đủ 1 món quen | Vốn đang giữ / hạn mức; 🔧 "còn 47tr, chưa đủ 1 món 1 lượng (149,5tr)" |
+| 🟠 **Đợi, chênh lệch cao** | Chênh lệch mua–bán hôm nay > 1,5 lần mức thường ngày | "mua hôm nay cần tăng 3,5% mới hòa vốn, thường 1,6%" |
+| 🔧 🟡 **Cân nhắc** | Giá đã vào vùng mua hoặc chạm giá mua lại, nhưng loại này đang có lô ở nhóm Nên chốt | "đang có lô V-2025-001 nên chốt: chốt lô đó, hoặc giữ nó thay cho mua thêm". Không có nút Mua… |
+| 🔧 🟢 **Mua lại** | Giá tiệm bán ra ≤ giá muốn mua lại của một lần bán loại này (đang chờ, chưa bỏ nhắc) | "chạm giá bạn đặt khi bán B-0001 (16,0tr)", nút **Mua lại…** như ở thẻ 🔁 |
+| 🟢 **Vùng mua** | Giá tiệm bán ra ≤ giá vào vùng mua | Nút **Mua…** (mở form Thêm lô chọn sẵn loại này). Có hạn mức thì ghi còn bao nhiêu, quy ra vàng |
+| ⚪ **Chưa tới** | Còn lại | "mua khi bán ra ≤ 149,6tr (còn cách 5,6%)"; 🔧 mốc ghi ở đây là mốc gần nhất trong hai: giá vào vùng mua và giá muốn mua lại đang chờ |
+
+🔧 Mới có dưới 14 ngày giá thì ô ghi thêm "(mới có N ngày giá)" ngay dưới kết quả, không chỉ trong phần Vì sao?.
+
+Ví dụ SJC: đỉnh tiệm bán ra 90 ngày là 166,0tr (02/09), X = 5% → mốc đỉnh 157,7tr. Ngày 10/10 đã mua giá 157,5tr → mốc rải 149,6tr. Giá vào vùng mua lấy mốc thấp hơn: **149,6tr**. Hôm nay tiệm bán ra 158,5tr → ⚪ Chưa tới, còn cách 5,6%. Mua xong một lần trong vùng mua thì mốc rải tự hạ thêm X% cho lần sau.
+
+**Vì sao? · Biểu đồ 90 ngày** (dưới bảng giá, thu gọn mặc định), mỗi loại một khối:
+
+- **Biểu đồ** 90 ngày: đường giá tiệm bán ra (đậm) và mua vào (nhạt); đường ngang nét đứt là **giá vào vùng mua**, đường chấm là **giá vốn bình quân** đang giữ; ▲ là các lần mua (theo đơn giá lô), ▼ là các lần bán. Rê chuột hoặc chạm để xem giá từng ngày.
+- **Các số dẫn tới kết quả**: đỉnh 90 ngày (ngày nào), giảm từ đỉnh bao nhiêu %, lần mua gần nhất trong 90 ngày (ngày, đơn giá), chênh lệch hôm nay và thường ngày, giá vốn bình quân, vốn đang giữ / hạn mức. 🔧 Thêm: giá muốn mua lại đang chờ (nếu có), lô cùng loại đang ở nhóm Nên chốt (nếu có), và giá 1 món quen khi có hạn mức.
+- Mới có dưới 14 ngày giá thì ghi "mới có N ngày giá, đỉnh 90 ngày chưa đủ tin cậy". Có thể nhập bù giá các ngày trước bằng ô Ngày ở bảng giá.
+
+Nhắc mua lại (mục c) vẫn giữ nguyên: đó là giá bạn tự đặt khi bán từng lô; gợi ý mua thêm là quy tắc chung cho cả loại.
 
 ### 2.2 Tab "Lô vàng"
 
@@ -91,11 +241,16 @@ Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi ti
   | Giá mua | ✔ | Nhập **đơn giá** (theo đơn vị niêm yết của loại) **hoặc tổng tiền**, app tự tính ô còn lại. Lô mới: đơn giá tự điền giá tiệm bán ra mới nhất của loại |
   | % kỳ vọng | ✔ | Tự điền mặc định từ Tham số |
   | Báo sắp đạt khi giá còn cần tăng ≤ (%) | ✔ | Tự điền mặc định từ Tham số |
+  | 🆕 Nhắc chốt nếu lời tụt về (%) | | Thường đặt qua nút **Giữ, nâng mục tiêu**; để trống = không nhắc. 🔧 Nhập thì phải > 0 và thấp hơn lời hiện tại, như hộp Giữ; lô chưa có giá thì chưa đặt được |
   | Ghi chú | | Nơi mua, số seri... |
 
 - **Số lô tự sinh**: `V-<năm mua>-<số thứ tự 3 chữ số>`, ví dụ `V-2026-001`. Số thứ tự đánh theo năm mua, không dùng lại khi xóa, và luôn lớn hơn mọi mã đang có (kể cả khi khôi phục file thiếu bộ đếm).
-- **Mặc định để nhập ít nhất**: loại vàng = loại của lô nhập gần nhất; trọng lượng mỗi món = của lô gần nhất cùng loại (đổi loại thì đổi theo, trừ khi đã sửa tay); đơn giá = giá tiệm bán ra hôm nay. Mua đúng loại quen thì chỉ cần nhập **số món** rồi Lưu.
-- Ô ít dùng (mức báo sắp đạt, ghi chú) nằm trong **"Tùy chọn khác"**, thu gọn mặc định.
+- **Mặc định để nhập ít nhất**: loại vàng = loại của lô nhập gần nhất; trọng lượng mỗi món = của lô gần nhất cùng loại, 🆕 loại chưa có lô nào (kể cả loại mới tạo ngay trong form) thì là **1 đơn vị niêm yết** của loại (lượng → `1 lượng`, chỉ → `1 chỉ`); đổi loại hoặc đổi đơn vị niêm yết của loại mới thì trọng lượng đổi theo, trừ khi đã sửa tay; đơn giá = giá tiệm bán ra hôm nay. Mua đúng loại quen thì chỉ cần nhập **số món** rồi Lưu.
+- 🆕 **Trọng lượng điền sẵn là một khối**: lần đầu gõ vào một ô trọng lượng thì các ô khác đang mang số điền sẵn tự xóa trắng. Ví dụ đang điền sẵn `1 chỉ`, gõ `1` vào ô lượng → `1 lượng`. Cần ghép nhiều đơn vị (trang sức `1 chỉ 2 phân`) thì gõ tiếp vào các ô kia như thường. Áp dụng cho lô mới (Thêm lô, Mua lại…); form Sửa lô giữ cách cũ vì trọng lượng ở đó là số thật đã lưu.
+- 🆕 Ngay dưới 5 ô trọng lượng hiện **chữ đậm** `Mỗi món 1 lượng · cả lô 2 lượng`, thay cho dòng chữ xám nhỏ, để thấy ngay app hiểu đúng chưa.
+- 🆕 Lý do hai điều trên: khi dùng thử, form lô đầu tiên điền sẵn `1 chỉ` trong khi loại mới niêm yết theo lượng; gõ `1` vào ô lượng thành `1 lượng 1 chỉ`. Với 2 miếng SJC vốn 300 triệu, giá 156 triệu/lượng, app báo lời +14,4% và "sắp đạt, cần tăng 0,5%", trong khi thật chỉ +4%, cần tăng 10,6%. Kiểm tra lệch 15% không bắt được vì loại mới chưa có giá, còn thừa 1 chỉ trên 1 lượng chỉ lệch khoảng 9%.
+- Ô ít dùng (mức báo sắp đạt, 🆕 mức nhắc tụt, ghi chú) nằm trong **"Tùy chọn khác"**, thu gọn mặc định.
+- 🔧 **Vượt hạn mức**: lưu lô mới mà tổng vốn đang giữ vượt hạn mức thì hỏi lại "Vốn đang giữ sẽ lên 852tr, vượt hạn mức 600tr. Vẫn lưu?".
 - Một lần mua có nhiều loại món (ví dụ 1 miếng 1 lượng và 1 miếng 5 chỉ) thì nhập thành **2 lô**.
 - Danh sách lô: lọc theo **Đang giữ / Đã đóng / Tất cả** và theo loại vàng.
 - **Sửa lô**: sửa được mọi ô. **Xóa lô**: xóa được cả lô đã bán; khi đó các lần bán của lô bị xóa theo (app hỏi rõ số lần bán sẽ mất).
@@ -107,7 +262,7 @@ Mở từ nút bán ở tab Hôm nay, tab Lô vàng hoặc tab Cần tiền.
 
 - Hiện sẵn chỉ 2 ô: **Số món bán** và **Giá bán**. Ngày bán (mặc định hôm nay), giá muốn mua lại, ghi chú nằm trong **"Tùy chọn khác"** (tự mở khi sửa lần bán).
 - **Số món bán** (tối đa bằng số món còn lại). Các nút gợi ý điền sẵn: Bán hết · Bán lấy lại vốn · Bán một nửa.
-- **Giá bán** (mặc định là giá tiệm mua vào hôm nay, sửa được theo giá thực tế).
+- **Giá bán** (mặc định là giá tiệm mua vào hôm nay, sửa được theo giá thực tế). 🔧 Giá vừa gõ ở bảng giá đã được lưu khi bấm sang nút Bán… (rời dòng là lưu, mục 2.1a), nên giá điền sẵn là giá vừa gõ.
 - **Xem trước** trước khi xác nhận: tiền thu về, vốn của phần bán, lời/lỗ chốt, so với gửi ngân hàng, lô còn lại bao nhiêu.
 
 - Dưới ô giá ghi rõ giá đang điền sẵn là **giá ngày nào**; giá cũ thì nhắc kiểm tra giá thực tế.
@@ -126,7 +281,7 @@ Nhập **số tiền cần** → app đưa ra 3 phương án đặt cạnh nhau:
 
 Quy tắc chung cho cả 3 phương án:
 
-1. **Không đụng lô lỗ** nếu các lô lời đã đủ tiền.
+1. **Không đụng lô lỗ** nếu các lô lời đã đủ tiền. 🆕 Lô lỗ ở đây là mọi lô có % lời < 0, kể cả lô lỗ chỉ do chênh lệch mua–bán (nằm trong nhóm Giữ ở tab Hôm nay), vì bán lúc này vẫn là chốt lỗ.
 2. Thiếu tiền thì **bổ sung từ lô lỗ**, chọn lô **lỗ % ít nhất trước**, và gắn cảnh báo ⚠️.
 3. Bán theo **từng món** nên tiền thu có thể **dư** một chút; app ghi rõ số dư.
 4. Tổng tất cả các lô vẫn không đủ thì báo: còn thiếu bao nhiêu.
@@ -144,7 +299,7 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 
 - **Lịch sử bán**: lọc theo năm. Mỗi dòng có nút **Sửa** và **Xóa**. Tổng lời đã chốt theo năm.
 - **Lịch sử giá**: hiện 30 dòng gần nhất, có nút xem tất cả. Xóa được từng dòng.
-- **Thống kê theo loại vàng**: vốn đang giữ, giá trị, lời tạm tính, lời đã chốt.
+- **Thống kê theo loại vàng**: vốn đang giữ, giá trị, lời tạm tính, lời đã chốt, 🆕 **giá vốn bình quân** (theo đơn vị niêm yết, của phần đang giữ).
 
 ### 2.6 Tab "Tham số"
 
@@ -154,6 +309,8 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 | Lạm phát (%/năm) | 3,5 |
 | % kỳ vọng mặc định cho lô mới | 15 |
 | Báo sắp đạt khi giá còn cần tăng ≤ (%) | 2 |
+| 🆕 Mua thêm khi giá giảm từ đỉnh 90 ngày ≥ (%) | 5 |
+| 🆕 Hạn mức vốn cho vàng (để trống = không giới hạn) | 800.000.000 |
 | Danh sách loại vàng | Tên, đơn vị niêm yết (lượng/chỉ/phân/ly/dem). Đổi tên được; chỉ xóa được loại chưa có lô nào |
 
 ---
@@ -166,12 +323,26 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 | Cả lô (nhập nhầm hẳn) | Tab Lô vàng → **Xóa** (kèm các lần bán của lô) |
 | Lần bán (ngày, số món, giá, mua lại, ghi chú) | Tab Lịch sử (hoặc Chi tiết lô) → **Sửa** |
 | Bán nhầm | Tab Lịch sử → **Xóa** lần bán, số món trả lại cho lô |
-| Giá hôm nay | Nhập lại ở tab Hôm nay → Cập nhật giá (đè lên giá cùng ngày) |
+| Giá hôm nay | Sửa lại ô giá ở tab Hôm nay, 🔧 rời dòng là lưu đè lên giá cùng ngày; hoặc ↶ Hoàn tác |
 | Giá một ngày cũ | Chọn ngày đó ở ô Ngày rồi nhập lại, hoặc tab Lịch sử → Lịch sử giá → **Xóa** |
-| Nâng mục tiêu nhầm | Tab Lô vàng → Sửa → % kỳ vọng |
+| Nâng mục tiêu nhầm, 🆕 đặt mức nhắc tụt nhầm | Tab Lô vàng → Sửa → % kỳ vọng, mức nhắc tụt (trong Tùy chọn khác) |
 | Tham số, tên loại vàng | Tab Tham số, sửa trực tiếp |
 
 **Hoàn tác thao tác vừa làm**: sau mỗi thay đổi, đầu trang hiện nút **↶ Hoàn tác: <việc vừa làm>** (hoặc bấm Ctrl+Z khi không đang gõ trong ô). Nhớ tối đa 10 bước gần nhất, áp dụng cho mọi thay đổi kể cả xóa. Danh sách hoàn tác mất khi tải lại trang hoặc mở file dữ liệu khác.
+
+### 2.8 Màn hình hẹp và điện thoại 🆕
+
+Khi dùng thử trên điện thoại, bảng giá phải cuộn ngang mới thấy ô Tiệm bán ra, bảng lô phải cuộn ngang mới thấy lời/lỗ.
+
+- Áp dụng khi màn hình hẹp dưới 640px; rộng hơn thì giữ bảng như cũ.
+- **Tab Hôm nay không cuộn ngang** trên màn hình từ 360px trở lên. Các tab khác: trang không cuộn ngang, bảng dài cuộn trong khung của nó.
+- **Bảng giá**: mỗi loại một khối, ô Tiệm mua vào và Tiệm bán ra xếp chồng, dòng dưới là kết quả **Mua thêm?**; các cột còn lại thành một dòng chữ nhỏ.
+- **Bảng lô ở Hôm nay**: mỗi lô một thẻ. Dòng 1: mã lô, loại, **% lời**. Dòng 2: lời/lỗ và giá trị hôm nay. Dòng 3: các nút. Vốn, mục tiêu, so với ngân hàng xem trong Chi tiết.
+- **Biểu đồ** co theo bề ngang màn hình.
+- **Dữ liệu**: trình duyệt nào không ghi thẳng vào file được (thường là trình duyệt điện thoại, Safari, Firefox) thì app là **chế độ xem**, vì nếu cho lưu riêng trong trình duyệt đó sẽ có hai bộ dữ liệu lệch nhau:
+  - Nút **Mở tai-san.json để xem**: chọn file từ OneDrive/Google Drive.
+  - Gõ giá vào bảng giá để biết ngay tại tiệm lô nào nên chốt, có nên mua thêm không. 🔧 Như máy tính, rời dòng là áp giá đó, nhưng **chỉ tính lại, không lưu**: tính lại mọi phần, kể cả phương án Cần tiền đang mở (bỏ nút "Xem với giá này"). Mọi ghi chép (giá, mua, bán) làm trên máy tính.
+- Cách mở `index.html` trên điện thoại do bạn tự lo; app vẫn là một file HTML.
 
 ---
 
@@ -186,6 +357,7 @@ Ký hiệu cho một lô đang giữ:
 | `T` | Tổng tiền mua lô |
 | `n` | Số món còn lại = `n0 − tổng số món đã bán` |
 | `P` | Giá **tiệm mua vào** hôm nay (theo đơn vị niêm yết) |
+| `Q` | 🆕 Giá **tiệm bán ra** hôm nay (theo đơn vị niêm yết) |
 | `d` | Số ngày giữ = hôm nay − ngày mua |
 | `r` | Lãi suất ngân hàng (%/năm) · `π` là lạm phát (%/năm) |
 
@@ -204,6 +376,14 @@ Lãi thực           = (1 + g) / (1 + π)^(d / 365) − 1
 Cần tăng để hòa vốn = V / G − 1                      (chỉ khi đang lỗ)
 Giá cần để đạt mục tiêu = V × (1 + % kỳ vọng) / (n × w)
 Giá cần tăng để đạt  = Giá cần để đạt mục tiêu / P − 1   (dùng cho nhóm Sắp đạt / Giữ)
+Giá vốn mỗi đơn vị   = T / (n0 × w)                      🆕 (tách lỗ chênh lệch, mục 3.4)
+Giá ứng với mức nhắc = V × (1 + mức nhắc tụt) / (n × w)   🆕 (hiện trong hộp thoại Giữ)
+```
+
+🆕 Theo loại vàng:
+
+```
+Giá vốn bình quân  = Σ V / Σ (n × w)  cộng các lô đang giữ của loại đó
 ```
 
 ### 3.2 Một lần bán `k` món với giá `S`
@@ -225,16 +405,60 @@ Bán lấy lại vốn   k = làm tròn lên (V / (w × P)), tối đa n
 
 ### 3.4 Quy tắc phân nhóm
 
+Xét theo thứ tự, gặp điều kiện đúng đầu tiên thì dừng:
+
 ```
 Nên chốt : g ≥ % kỳ vọng
-Đang lỗ  : g < 0
-Sắp đạt  : còn lại, và Giá cần tăng để đạt ≤ mức báo sắp đạt
-Giữ      : còn lại
+           🆕 hoặc (lô có mức nhắc tụt và g < mức nhắc tụt)          🔧 trước đây: 0 ≤ g < mức nhắc (bỏ qua lô đã tụt xuống lỗ)
+Đang lỗ  : g < 0 và (Q < giá vốn mỗi đơn vị                         (giá đã giảm so với lúc mua; thiếu Q thì coi là lỗ)
+                     🔧 hoặc chênh lệch cao)                         (tiệm đang nới chênh lệch bất thường)
+Sắp đạt  : g ≥ 0 và Giá cần tăng để đạt ≤ mức báo sắp đạt
+Giữ      : còn lại (đang lời mà chưa sắp đạt, 🆕 hoặc lỗ chỉ do chênh lệch mua–bán)
 ```
+
+🔧 Định nghĩa dùng ở trên:
+
+```
+% lời tại một ngày cũ  = giá tiệm mua vào ngày đó / giá vốn mỗi đơn vị − 1        (không phụ thuộc số món còn lại)
+Đỉnh lời               = % lời cao nhất từ ngày mua tới nay (theo giá đã nhập), hiện trong dòng nhắc
+Chênh lệch cao         : như mục 3.5 (chênh lệch hôm nay > 1,5 × trung vị 90 ngày; dưới 10 dòng giá thì không xét)
+```
+
+Mức nhắc luôn được đặt thấp hơn lời lúc đặt (mục 3.6), nên không cần xét "đã từng chạm mức nhắc chưa".
+
+🔧 So sánh % lời với mục tiêu và mức nhắc **bỏ qua sai số tính toán** của máy (lệch dưới 0,0001 điểm %). Ví dụ lô vốn 100tr, giá 115tr: máy tính ra 14,999…%, trước đây không vào Nên chốt.
 
 Mọi con số "cần tăng" trong app (sắp đạt, giữ, hòa vốn, mua hôm nay) đều là **% giá tiệm mua vào cần tăng**, nên so sánh trực tiếp với nhau được.
 
-### 3.5 Kiểm tra chống nhập sai
+### 3.5 Gợi ý mua thêm 🆕
+
+Cho một loại vàng. `Q`, `P` là giá tiệm bán ra, mua vào của ngày đang xét (giá vừa gõ cũng tính). **Cửa sổ** là 90 ngày tính tới ngày đó, chỉ lấy các dòng giá có giá bán ra. `X` là "Mua thêm khi giá giảm từ đỉnh" trong Tham số.
+
+```
+Đỉnh 90 ngày           = giá tiệm bán ra cao nhất trong cửa sổ
+Mốc đỉnh               = Đỉnh 90 ngày × (1 − X)
+Mốc rải                = đơn giá lần mua gần nhất của loại trong cửa sổ × (1 − X)   (chưa mua trong cửa sổ thì bỏ; 🔧 chỉ xét lô còn đang giữ)
+Giá vào vùng mua       = min(Mốc đỉnh, Mốc rải)
+🔧 Mốc mua lại          = giá muốn mua lại cao nhất trong các lần bán loại này đang chờ (chưa bỏ nhắc)
+🔧 Mốc gần nhất          = max(Giá vào vùng mua, Mốc mua lại)                     (dùng cho dòng "mua khi bán ra ≤ …")
+🔧 Có lô nên chốt        : loại này có lô đang ở nhóm Nên chốt (mục 3.4)
+🔧 Món quen              = trọng lượng mỗi món của lô gần nhất cùng loại (chưa có lô thì 1 đơn vị niêm yết)
+Còn cách               = 1 − Giá vào vùng mua / Q                  (giá tiệm bán ra cần giảm bấy nhiêu % nữa)
+Chênh lệch hôm nay     = Q / P − 1
+Chênh lệch thường ngày = trung vị của (bán ra / mua vào − 1) các dòng giá trong cửa sổ
+Chênh lệch cao         : Chênh lệch hôm nay > 1,5 × Chênh lệch thường ngày   (cửa sổ dưới 10 dòng giá thì bỏ kiểm tra này)
+Còn trong hạn mức      = Hạn mức − Σ V                              (mọi lô đang giữ, mọi loại)
+Quy ra vàng            = Còn trong hạn mức / Q, đổi ra trọng lượng, làm tròn xuống tới chỉ
+🔧 Đủ hạn mức            : Còn trong hạn mức ≤ 0, hoặc Còn trong hạn mức < Món quen × Q
+```
+
+Đơn giá lần mua = `T / (n0 × w)` của lô có ngày mua gần nhất. Lô mua từ nút **Mua lại…** cũng tính là một lần mua. Mốc rải chỉ xét lần mua trong cửa sổ, để một lần mua giá thấp từ lâu không chặn mua mãi khi giá đã lên mặt bằng mới.
+
+Thứ tự xét kết quả: nhập giá hôm nay → Đủ hạn mức → Đợi, chênh lệch cao → 🔧 Cân nhắc (`Có lô nên chốt` và `Q ≤ Mốc gần nhất`) → 🔧 Mua lại (`Q ≤ Mốc mua lại`) → Vùng mua (`Q ≤ Giá vào vùng mua`) → Chưa tới.
+
+🔧 Mốc rải bỏ qua lô đã bán hết: đã chốt hết lô mua 10/10 giá 157,5tr thì lần mua sau không còn bị đòi rẻ hơn lô đó thêm X%. Lô còn món (kể cả đã bán bớt) vẫn tính.
+
+### 3.6 Kiểm tra chống nhập sai
 
 | Chỗ nhập | Kiểm tra |
 |---|---|
@@ -243,12 +467,20 @@ Mọi con số "cần tăng" trong app (sắp đạt, giữ, hòa vốn, mua hô
 | Đơn giá lô mới (mua từ ngày có giá trở đi) | Lệch > 15% so với giá tiệm bán ra → hỏi lại |
 | Giá bán | Lệch > 15% so với giá tiệm mua vào gần nhất → hỏi lại |
 | % kỳ vọng | Phải > 0; mức báo sắp đạt không âm |
+| 🆕 Giữ, nâng mục tiêu / Giữ tiếp | Mục tiêu mới > mức lời hiện tại; mức nhắc tụt để trống được, nếu nhập thì 🔧 > 0 và < mức lời hiện tại |
+| 🔧 Mức nhắc ở form Thêm / Sửa lô | Để trống được; nếu nhập thì > 0 và < lời hiện tại (như hộp Giữ); lô chưa có giá thì chưa đặt được |
+| 🔧 Lưu lô mới vượt hạn mức | Hỏi lại, ghi rõ vốn sẽ lên bao nhiêu |
+| 🔧 Ô Ngày ở bảng giá trống hoặc chưa hợp lệ | Gợi ý tạm tính theo hôm nay; rời dòng giá thì báo "Chưa nhập ngày", chưa lưu |
+| 🔧 Giá hỏi lại khi rời dòng (lệch 15%) mà bấm Hủy | Dòng trở về giá điền sẵn, không lưu |
+| 🆕 Tham số mua thêm | % giảm từ đỉnh phải > 0; hạn mức để trống hoặc > 0 |
 | Sửa lô đã có lần bán | Không đổi sang loại vàng có đơn vị niêm yết khác (giá các lần bán đã tính theo đơn vị cũ) |
 | Ghi file lỗi | Báo một lần bằng hộp thoại; dữ liệu vẫn còn trong trình duyệt |
+| 🔧 Ghi bộ nhớ trình duyệt lỗi (đầy) | Báo một lần; xóa mốc đồng bộ để lần mở sau dùng dữ liệu trong file (mục 0) |
+| 🔧 File bị sửa ở nơi khác lúc sắp ghi | Không ghi đè; nạp file, tải bản trình duyệt về, báo làm lại thao tác (mục 0) |
 
 Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày của giá mới nhất, để nhập lô cũ không lấy nhầm giá hôm nay.
 
-### 3.6 Lưu ý về độ chính xác
+### 3.7 Lưu ý về độ chính xác
 
 - So với ngân hàng dùng **lãi đơn** và **lãi suất hiện tại cho toàn bộ thời gian giữ**, nên chỉ mang tính tham khảo với lô giữ lâu. 
 - Tiền tính ra được làm tròn đến đồng khi hiển thị; bên trong giữ nguyên để cộng dồn không lệch.
@@ -264,7 +496,9 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
     "lai_suat_ngan_hang": 5.5,
     "lam_phat": 3.5,
     "vang_ky_vong_mac_dinh": 15,
-    "vang_sap_dat_mac_dinh": 2
+    "vang_sap_dat_mac_dinh": 2,
+    "vang_mua_giam_pct": 5,
+    "vang_han_muc_von": null
   },
   "vang": {
     "loai": [
@@ -283,6 +517,7 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
         "tong_tien_mua": 180000000,
         "ky_vong_pct": 15,
         "sap_dat_pct": 2,
+        "nhac_tut_pct": null,
         "ghi_chu": ""
       }
     ],
@@ -307,6 +542,9 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
 
 - Giá luôn lưu **theo đơn vị niêm yết** của loại vàng.
 - Số món còn lại, trạng thái lô (đang giữ/đã đóng) **không lưu**, luôn tính lại từ `lo` và `ban`, để không bao giờ lệch nhau.
+- 🆕 `nhac_tut_pct`: nhắc chốt khi lời tụt về mức này (%), `null` = không nhắc. File cũ chưa có trường này thì coi như `null`, không cần nâng `phien_ban`.
+- 🔧 Bản 🔧 không thêm trường dữ liệu nào; file bản 🆕 dùng nguyên được.
+- 🆕 `vang_mua_giam_pct`: % giảm từ đỉnh 90 ngày để vào vùng mua. `vang_han_muc_von`: hạn mức vốn cho vàng (đồng), `null` = không giới hạn. File cũ thiếu thì lấy mặc định (5 và `null`).
 - `phien_ban` dùng để tự nâng cấp file khi app thêm tính năng.
 - `tiet_kiem`, `cctg`, `dat` để trống, không dùng.
 
@@ -318,11 +556,19 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
 |---|---|
 | Tiết kiệm, CCTG, Đất | App ngân hàng đã theo dõi; làm thêm là nhập hai lần |
 | Phân tích vòng bán rồi mua lại | Thêm số liệu phải đọc; mua lại đã có nút Thêm lô và nhắc mua lại |
-| Chốt lời theo nhiều bậc | Phải cài nhiều mốc mỗi lô; nút Lấy lại vốn / Bán một nửa đã đủ |
-| Biểu đồ giá | Xem cho biết, không giúp ra quyết định |
-| Giá vốn trung bình, nhắc mua thêm | Trùng với nhắc mua lại |
+| Chốt lời theo nhiều bậc | Phải cài nhiều mốc mỗi lô; nút Lấy lại vốn / Bán một nửa đã đủ. 🆕 Mức nhắc tụt chỉ là một mức, đặt lúc bấm Giữ, không phải cài trước |
+| 🆕 Dự báo giá, chỉ báo kỹ thuật (đường trung bình, RSI…) | App không đoán giá. Quy tắc mua rải khi giảm từ đỉnh đọc là hiểu, tự kiểm lại được bằng biểu đồ |
+| 🆕 Kế hoạch tích lũy đều hằng tháng | Thêm tham số và phải theo dõi theo tháng; muốn mua đều thì cứ mua, hạn mức vốn đã chặn mua quá tay |
+| 🆕 Gợi ý mua bao nhiêu | Tùy tiền có trong tay từng lúc; app chỉ ghi còn bao nhiêu trong hạn mức |
 | Nhắc sao lưu | File đã nằm trong OneDrive/Drive; dòng trạng thái đã nhắc khi chưa chọn file |
 | Tự lấy giá từ internet | Dễ hỏng, bị chặn khi mở file trên máy; nhập 2 ô giá chỉ mất vài giây |
+| 🔧 Tự gộp thay đổi từ 2 nơi (2 tab, 2 máy) | Dễ gộp sai số món, số lần bán. App dùng dữ liệu trong file, tải bản còn lại về để bạn tự khôi phục nếu cần |
+| 🔧 Khóa, chỉ cho một tab dùng | Phiền khi lỡ mở 2 tab; kiểm tra "nơi lưu có bị sửa ở nơi khác không" lúc quay lại tab và trước khi lưu đã đủ an toàn |
+| 🔧 Báo qua lại giữa các tab để tự nạp lại tức thì | Thêm một cơ chế chỉ cho trường hợp cùng trình duyệt; phép kiểm tra lúc quay lại tab đã phủ, lại phủ luôn nhiều máy |
+| 🔧 Lưu giá theo từng phím gõ | Sẽ lưu cả số đang gõ dở và hỏi lại liên tục; lưu khi rời dòng là đủ |
+| 🔧 Đặt trước mức nhắc cao hơn lời hiện tại ("lên 20% rồi tụt về 15% thì nhắc") | Phải nhớ thêm trạng thái "đã chạm mức chưa" cho từng lô; luồng chính là bấm Giữ khi đã đạt mục tiêu, lúc đó lời luôn cao hơn mức nhắc |
+
+Trước đây mục này có "Biểu đồ giá" và "Giá vốn trung bình, nhắc mua thêm". 🆕 Nay đã làm: biểu đồ 90 ngày và gợi ý mua thêm (2.1e), giá vốn bình quân (2.5).
 
 ## 6. Các quyết định đã chốt
 
