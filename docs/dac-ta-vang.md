@@ -320,7 +320,7 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
 | Phân tích vòng bán rồi mua lại | Thêm số liệu phải đọc; mua lại đã có nút Thêm lô và nhắc mua lại |
 | Chốt lời theo nhiều bậc | Phải cài nhiều mốc mỗi lô; nút Lấy lại vốn / Bán một nửa đã đủ |
 | Biểu đồ giá | Xem cho biết, không giúp ra quyết định |
-| Giá vốn trung bình, nhắc mua thêm | Trùng với nhắc mua lại |
+| Giá vốn trung bình, "mua thêm bao nhiêu để hòa vốn" (kể cả bản chỉ hiện giá hòa vốn cả loại) | Mua thêm không bao giờ hòa vốn ngay vì mua theo giá bán ra, cao hơn giá tiệm mua vào; mua càng nhiều càng ít tác dụng. Tổng lời/lỗ giống hệt khi tính riêng từng lô, nên chỉ là cách nhìn khác của cùng số tiền. Dễ dẫn tới dồn tiền mua thêm để gỡ lỗ. Lô mua hôm nay cần tăng bao nhiêu đã có ở cột "Mua hôm nay cần tăng để hòa vốn" |
 | Nhắc sao lưu | File đã nằm trong OneDrive/Drive; dòng trạng thái đã nhắc khi chưa chọn file |
 | Tự lấy giá từ internet | Dễ hỏng, bị chặn khi mở file trên máy; nhập 2 ô giá chỉ mất vài giây |
 
