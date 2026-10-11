@@ -1398,7 +1398,7 @@ const act = {
       h = await showSaveFilePicker({ suggestedName: !cur ? 'tai-san.json' : cur.name === 'tai-san-moi.json' ? 'tai-san-moi-2.json' : 'tai-san-moi.json', types: JSON_TYPES });
       if (cur && await h.isSameEntry(cur)) {
         if (fileHandle) {   // đang mở chính file đó: dữ liệu đang mở là của file, ghi lại vào đó
-          await useFile(h, true, await fileSeen(h));
+          const { mod, cap } = await fileSeen(h); await useFile(h, true, { mod, cap });
           return setNotice(`Đây là file đang dùng (<b>${esc(h.name)}</b>); dữ liệu đang mở đã được ghi lại vào đó.`);
         }
         // Ở màn chờ: nội dung file đã bị xóa trắng, chưa ghi gì vào; chỉ cách lấy lại
@@ -1541,8 +1541,9 @@ function fileError(e, h) {
   if (e.name === 'AbortError') return;   // bấm Hủy ở hộp chọn file
   if (!fileHandle && pendingHandle) {   // đang ở màn chờ: báo ngay trên màn chờ
     ui.gateError = fileErrMsg(e, h);
-    // Cách lấy lại (khôi phục, dùng bản trình duyệt, tạo file mới) chỉ hiện khi chính file đang nhớ hỏng, rỗng hoặc mất
-    if (h === pendingHandle) { ui.gateBad = !!e.bad; ui.gateLost = e.name === 'NotFoundError'; ui.gateRestore = null; }
+    // Cách lấy lại (khôi phục, dùng bản trình duyệt, tạo file mới) chỉ hiện khi chính file đang nhớ hỏng, rỗng hoặc mất;
+    // lỗi khác (chưa cho quyền…) giữ nguyên các nút đang có
+    if (h === pendingHandle && (e.bad || e.name === 'NotFoundError')) { ui.gateBad = !!e.bad; ui.gateLost = !e.bad; ui.gateRestore = null; }
     render();
   } else alert(fileErrMsg(e, h));
 }
