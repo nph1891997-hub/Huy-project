@@ -58,6 +58,8 @@ dialog h2{margin:0 0 12px;font-size:17px}
 .preview{background:#fafbfc;border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-top:8px}
 .preview td{border:0;padding:2px 6px}
 .hidden{display:none!important}
+summary{cursor:pointer;color:var(--muted)}
+details[open] summary{margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -242,14 +244,14 @@ function viewHomNay() {
     <button class="primary" data-act="lot-add">+ Thêm lô</button>`);
   const priceRows = D.vang.loai.map(t => {
     const p = latestPrice(t.id);
-    const spread = p && p.ban_ra ? 1 - p.mua_vao / p.ban_ra : null;
+    const beMua = p && p.ban_ra ? p.ban_ra / p.mua_vao - 1 : null;
     return `<tr><td>${esc(t.ten)}</td><td>${UNIT_NAME[t.don_vi_niem_yet]}</td>
       <td><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="0"></td>
       <td><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="0"></td>
-      <td class="n">${fmtP(spread, false)}</td><td class="muted small">${p ? 'giá ngày ' + fmtD(p.ngay) : 'chưa có giá'}</td></tr>`;
+      <td class="n">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td><td class="muted small">${p ? 'giá ngày ' + fmtD(p.ngay) : 'chưa có giá'}</td></tr>`;
   }).join('');
   let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" required></label></div>
-    <div class="scroll"><table><tr><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n">Chênh lệch</th><th></th></tr>${priceRows}</table></div>
+    <div class="scroll"><table><tr><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th></th></tr>${priceRows}</table></div>
     <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>`);
 
   const sts = openLots().map(l => lotState(l));
@@ -274,7 +276,10 @@ function viewHomNay() {
   for (const [g, title, extra] of groups) {
     const list = priced.filter(s => s.grp === g).sort((a, b) => b.g - a.g);
     if (!list.length) continue;
-    html += card(`${title} (${list.length})`, `<div class="scroll">${lotStateTable(list, extra)}</div>`, 'grp-' + g);
+    const table = `<div class="scroll">${lotStateTable(list, extra)}</div>`;
+    html += g === 'giu'
+      ? `<section class="card grp-giu"><details><summary><b>${title} (${list.length})</b> <span class="muted small">— bấm để xem</span></summary>${table}</details></section>`
+      : card(`${title} (${list.length})`, table, 'grp-' + g);
   }
   if (noPrice.length) html += card('Lô chưa có giá', `<p class="muted">Nhập giá cho loại vàng của các lô sau để xem gợi ý: ${noPrice.map(s => esc(s.lot.id)).join(', ')}</p>`);
   if (!sts.length) html += card('', `<p class="muted">Chưa có lô nào đang giữ.</p>`);
@@ -293,13 +298,12 @@ function viewHomNay() {
   return html;
 }
 function lotStateTable(list, extra) {
-  return `<table><tr><th>Lô</th><th>Loại</th><th>Còn lại</th><th>Ngày mua</th><th class="n">Ngày giữ</th><th class="n">Vốn còn lại</th><th class="n">Giá trị hôm nay</th>
-    <th class="n">Lời/lỗ</th><th class="n">%</th><th class="n">Mục tiêu</th><th class="n">%/năm</th><th class="n">So với gửi NH</th><th class="n">Lãi thực</th><th></th></tr>
-    ${list.map(s => `<tr><td><b>${esc(s.lot.id)}</b></td><td>${esc(s.t?.ten)}</td><td>${s.n} × ${fmtW(s.lot.trong_luong_mon_dem)}</td><td>${fmtD(s.lot.ngay_mua)}</td>
-      <td class="n">${s.d}</td><td class="n">${fmtM(s.V)}</td><td class="n">${fmtM(s.G)}</td>
+  return `<table><tr><th>Lô</th><th>Còn lại</th><th class="n">Vốn</th><th class="n">Giá trị hôm nay</th>
+    <th class="n">Lời/lỗ</th><th class="n">%</th><th class="n">Mục tiêu</th><th class="n">So với gửi NH</th><th></th></tr>
+    ${list.map(s => `<tr><td><b>${esc(s.lot.id)}</b><br><span class="small muted">${esc(s.t?.ten)}</span></td><td>${s.n} × ${fmtW(s.lot.trong_luong_mon_dem)}</td>
+      <td class="n">${fmtM(s.V)}</td><td class="n">${fmtM(s.G)}</td>
       <td class="n ${cls(s.L)}">${fmtMS(s.L)}</td><td class="n ${clsP(s.g)}"><b>${fmtP(s.g)}</b></td><td class="n">${fmtP(s.kv, false)}</td>
-      <td class="n ${clsP(s.annual)}">${fmtP(s.annual)}</td><td class="n ${cls(s.vsBank)}" title="Nếu gửi ngân hàng: ${fmtM(s.B)}">${fmtMS(s.vsBank)}</td>
-      <td class="n ${clsP(s.real)}">${fmtP(s.real)}</td><td>${extra(s)}</td></tr>`).join('')}</table>`;
+      <td class="n ${cls(s.vsBank)}">${fmtMS(s.vsBank)}</td><td>${extra(s)}</td></tr>`).join('')}</table>`;
 }
 
 // ===================== Tab: Lô vàng =====================
@@ -336,7 +340,8 @@ function lotDetail(l) {
   const s = lotState(l);
   const sales = D.vang.ban.filter(b => b.lo_id === l.id).sort((a, b) => a.ngay.localeCompare(b.ngay));
   let h = l.ghi_chu ? `<p><b>Ghi chú:</b> ${esc(l.ghi_chu)}</p>` : '';
-  if (s.n > 0 && s.hasPrice) h += `<p>Hôm nay: giá trị ${fmtM(s.G)}, lời/lỗ <span class="${cls(s.L)}">${fmtMS(s.L)} (${fmtP(s.g)})</span>, so với gửi ngân hàng <span class="${cls(s.vsBank)}">${fmtMS(s.vsBank)}</span>.</p>`;
+  if (s.n > 0 && s.hasPrice) h += `<p>Hôm nay: giá trị ${fmtM(s.G)}, lời/lỗ <span class="${cls(s.L)}">${fmtMS(s.L)} (${fmtP(s.g)})</span>, so với gửi ngân hàng <span class="${cls(s.vsBank)}">${fmtMS(s.vsBank)}</span>.<br>
+    Đã giữ ${s.d} ngày · quy ra năm <span class="${clsP(s.annual)}">${fmtP(s.annual)}</span> · lãi thực sau lạm phát <span class="${clsP(s.real)}">${fmtP(s.real)}</span>.</p>`;
   h += sales.length ? `<b>Lịch sử bán</b>${salesTable(sales, false)}` : '<p class="muted">Chưa bán lần nào.</p>';
   return h;
 }

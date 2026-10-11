@@ -1,4 +1,4 @@
-# Đặc tả: App quản lý tài sản — Giai đoạn 1: Vàng
+# Đặc tả: App quản lý vàng
 
 > Trạng thái: **đã duyệt, đã làm bản đầu tiên (`index.html`)** · Ngày: 2026-10-11
 
@@ -6,7 +6,8 @@
 
 - **Một file `index.html` duy nhất**, mở bằng Chrome/Edge trên máy tính là chạy. Không build, không cài đặt, không server.
 - **App không đoán giá.** Mọi gợi ý chỉ dựa trên mục tiêu bạn tự đặt và giá bạn tự nhập. Quyết định cuối cùng là của bạn.
-- **Giai đoạn 1 chỉ làm Vàng**, nhưng cấu trúc dữ liệu đã chừa sẵn chỗ cho Tiết kiệm, Chứng chỉ tiền gửi (CCTG) và Đất.
+- **Chỉ tập trung vào vàng.** Tiết kiệm và chứng chỉ tiền gửi đã có app ngân hàng theo dõi. So sánh với gửi ngân hàng dùng ô lãi suất trong Tham số.
+- **Tiêu chí thêm tính năng:** chỉ thêm khi nó giúp luồng dùng hằng ngày (nhập giá → xem lô nên chốt → bán hoặc giữ → thỉnh thoảng mua thêm hoặc cần tiền) và không bắt người dùng nhập hay đọc thêm.
 
 ### Lưu dữ liệu
 
@@ -40,9 +41,9 @@ Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch s�
 
 **a) Bảng nhập giá**: mỗi loại vàng một dòng.
 
-| Loại | Đơn vị niêm yết | Tiệm mua vào | Tiệm bán ra | Chênh lệch |
+| Loại | Đơn vị niêm yết | Tiệm mua vào | Tiệm bán ra | Mua hôm nay cần tăng để hòa vốn |
 |---|---|---|---|---|
-| SJC miếng | lượng | `[ ô nhập ]` | `[ ô nhập ]` | 1,7% (tự tính) |
+| SJC miếng | lượng | `[ ô nhập ]` | `[ ô nhập ]` | +1,7% (= bán ra ÷ mua vào − 1) |
 
 - Ngày mặc định là hôm nay, sửa được (để nhập lại giá ngày cũ).
 - Ô giá tự điền sẵn giá lần nhập gần nhất, bạn chỉ sửa chỗ thay đổi.
@@ -57,7 +58,9 @@ Thanh tab ở đầu trang: **Hôm nay · Lô vàng · Cần tiền · Lịch s�
 | ⚪ **Giữ** | `0 ≤ % lời` và chưa sắp đạt | — |
 | 🔴 **Đang lỗ** | `% lời < 0` | Lỗ bao nhiêu, giá cần tăng bao nhiêu % để hòa vốn |
 
-Cột chung cho mọi lô: số lô, loại, còn lại (món × trọng lượng), ngày mua, số ngày giữ, vốn còn lại, giá trị hôm nay, lời/lỗ (đ và %), % quy ra năm, **so với gửi ngân hàng**, **lãi thực sau lạm phát**.
+Cột chung cho mọi lô (giữ gọn, chỉ những gì cần để quyết định): số lô và loại, còn lại (món × trọng lượng), vốn còn lại, giá trị hôm nay, lời/lỗ (đ và %), mục tiêu, **so với gửi ngân hàng**.
+
+Số ngày giữ, % quy ra năm và lãi thực sau lạm phát xem ở **Chi tiết** của lô (tab Lô vàng). Nhóm ⚪ **Giữ** thu gọn mặc định vì không cần làm gì.
 
 **c) Nhắc mua lại**: liệt kê các lần bán có đặt "giá muốn mua lại" mà `giá tiệm bán ra hôm nay ≤ giá muốn mua lại`.
 
@@ -187,7 +190,7 @@ Bán lấy lại vốn   k = làm tròn lên (V / (w × P)), tối đa n
 
 ### 3.4 Lưu ý về độ chính xác
 
-- So với ngân hàng dùng **lãi đơn** và **lãi suất hiện tại cho toàn bộ thời gian giữ**, nên chỉ mang tính tham khảo với lô giữ lâu. Có thể nâng cấp thành bảng lãi suất theo năm ở giai đoạn sau.
+- So với ngân hàng dùng **lãi đơn** và **lãi suất hiện tại cho toàn bộ thời gian giữ**, nên chỉ mang tính tham khảo với lô giữ lâu. 
 - Tiền tính ra được làm tròn đến đồng khi hiển thị; bên trong giữ nguyên để cộng dồn không lệch.
 
 ---
@@ -244,19 +247,22 @@ Bán lấy lại vốn   k = làm tròn lên (V / (w × P)), tối đa n
 
 - Giá luôn lưu **theo đơn vị niêm yết** của loại vàng.
 - Số món còn lại, trạng thái lô (đang giữ/đã đóng) **không lưu**, luôn tính lại từ `lo` và `ban`, để không bao giờ lệch nhau.
-- `phien_ban` dùng để tự nâng cấp file khi app thêm tính năng ở giai đoạn sau.
+- `phien_ban` dùng để tự nâng cấp file khi app thêm tính năng.
+- `tiet_kiem`, `cctg`, `dat` để trống, không dùng.
 
 ---
 
-## 5. Ngoài phạm vi giai đoạn 1
+## 5. Đã cân nhắc và không làm
 
-- Tiết kiệm, CCTG, Đất, trang Tổng quan (giai đoạn 2–3).
-- Tự lấy giá vàng từ internet.
-- Biểu đồ.
-- Bảng lãi suất ngân hàng theo từng năm.
-- So sánh bán vàng với rút tiết kiệm trước hạn (cần có mảng Tiết kiệm).
-
----
+| Ý tưởng | Lý do không làm |
+|---|---|
+| Tiết kiệm, CCTG, Đất | App ngân hàng đã theo dõi; làm thêm là nhập hai lần |
+| Phân tích vòng bán rồi mua lại | Thêm số liệu phải đọc; mua lại đã có nút Thêm lô và nhắc mua lại |
+| Chốt lời theo nhiều bậc | Phải cài nhiều mốc mỗi lô; nút Lấy lại vốn / Bán một nửa đã đủ |
+| Biểu đồ giá | Xem cho biết, không giúp ra quyết định |
+| Giá vốn trung bình, nhắc mua thêm | Trùng với nhắc mua lại |
+| Nhắc sao lưu | File đã nằm trong OneDrive/Drive; dòng trạng thái đã nhắc khi chưa chọn file |
+| Tự lấy giá từ internet | Dễ hỏng, bị chặn khi mở file trên máy; nhập 2 ô giá chỉ mất vài giây |
 
 ## 6. Các quyết định đã chốt
 
