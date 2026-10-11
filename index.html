@@ -831,10 +831,11 @@ function homRest() {
   let html = '';
   const sts = heldStates();
   const priced = sts.filter(s => s.hasPrice), noPrice = sts.filter(s => !s.hasPrice);
-  const sumV = priced.reduce((a, s) => a + s.V, 0), sumG = priced.reduce((a, s) => a + s.G, 0), rz = realizedTotal();
+  // Vốn đang giữ tính mọi lô; giá trị và lời tạm tính chỉ tính lô có giá (lời = giá trị − vốn của các lô đó)
+  const allV = sts.reduce((a, s) => a + s.V, 0), sumV = priced.reduce((a, s) => a + s.V, 0), sumG = priced.reduce((a, s) => a + s.G, 0), rz = realizedTotal();
   html += card('', `<div class="stats">
-    <div class="stat"><span>Vốn đang giữ</span><b>${fmtM(sumV)}</b>${(lim => lim ? (left => `<span>/ hạn mức ${fmtTr(lim)} · ${left >= 0 ? 'còn ' + fmtTr(left) : 'vượt ' + fmtTr(-left)}</span>`)(lim - sts.reduce((a, s) => a + s.V, 0)) : '')(D.tham_so.vang_han_muc_von)}</div>
-    <div class="stat"><span>Giá trị hôm nay</span><b>${fmtM(sumG)}</b></div>
+    <div class="stat"><span>Vốn đang giữ</span><b>${fmtM(allV)}</b>${(lim => lim ? (left => `<span>/ hạn mức ${fmtTr(lim)} · ${left >= 0 ? 'còn ' + fmtTr(left) : 'vượt ' + fmtTr(-left)}</span>`)(lim - allV) : '')(D.tham_so.vang_han_muc_von)}</div>
+    <div class="stat"><span>Giá trị hôm nay</span><b>${fmtM(sumG)}</b>${noPrice.length ? `<span>chưa tính ${noPrice.map(s => esc(s.lot.id)).join(', ')} (chưa có giá)</span>` : ''}</div>
     <div class="stat"><span>Lời tạm tính</span><b class="${cls(sumG - sumV)}">${fmtMS(sumG - sumV)}</b><span>${fmtP(sumV ? sumG / sumV - 1 : null)}</span></div>
     <div class="stat"><span>Lời đã chốt (từ trước đến nay)</span><b class="${cls(rz)}">${fmtMS(rz)}</b></div>
     <div class="stat"><span>Tổng lời</span><b class="${cls(sumG - sumV + rz)}">${fmtMS(sumG - sumV + rz)}</b></div></div>`);
@@ -949,7 +950,8 @@ function cashPlans(X) {
     for (let i = rows.length - 1; i >= 0; i--) while (rows[i].k > 0 && have - rows[i].s.valMon >= X) { rows[i].k--; have -= rows[i].s.valMon; }
     return rows.filter(x => x.k > 0);
   };
-  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => b.reached - a.reached || b.g - a.g))));
+  // A: lô ở nhóm Nên chốt trước (đạt mục tiêu, hoặc lời tụt dưới mức nhắc), như tab Hôm nay đang báo
+  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => (b.grp === 'chot') - (a.grp === 'chot') || b.g - a.g))));
   const single = prof.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
     .sort((a, b) => (a.k * a.s.valMon - X) - (b.k * b.s.valMon - X));
   const B = single.length ? [single[0]] : prune(fill(loss, fill(prof.slice().sort((a, b) => b.n * b.valMon - a.n * a.valMon))));
