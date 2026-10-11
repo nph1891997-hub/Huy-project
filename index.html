@@ -479,7 +479,11 @@ function buyInfo(t, q, p, ngay) {
   const chot = mine.filter(s => s.hasPrice && s.grp === 'chot');   // lô cùng loại đang ở nhóm Nên chốt
   const b = { t, q, p, ngay, X, win, peak, lot, lastUnit, mDinh, mRai, entry, gapEntry: 1 - entry / q, rb, rebuyMark, near, gap: 1 - near / q, chot,
     drop: q / peak.q - 1, spread, usual, held, limit, avg, days: new Set(win.map(r => r.ngay)).size };
-  b.kind = limit && held >= limit ? 'full' : usual != null && spread > 1.5 * usual ? 'wait'
+  // Món quen: trọng lượng mỗi món của lô nhập gần nhất cùng loại (như form Thêm lô); chưa có lô thì 1 đơn vị niêm yết
+  const unitDem = UNIT_DEM[t.don_vi_niem_yet];
+  b.itemDem = [...D.vang.lo].reverse().find(l => l.loai_id === t.id)?.trong_luong_mon_dem || unitDem;
+  b.itemPrice = q * b.itemDem / unitDem;
+  b.kind = limit && (held >= limit || limit - held < b.itemPrice) ? 'full' : usual != null && spread > 1.5 * usual ? 'wait'
     : chot.length && q <= near ? 'consider'          // vừa nên chốt vừa vùng mua: bán rồi mua lại là mất chênh lệch 2 lần
     : rebuyMark != null && q <= rebuyMark ? 'rebuy' : q <= entry ? 'buy' : 'notyet';
   if (limit) { b.left = limit - held; const dem = b.left / q * UNIT_DEM[t.don_vi_niem_yet]; b.leftDem = dem >= 1000 ? Math.floor(dem / 1000) * 1000 : Math.floor(dem / 100) * 100; }
@@ -490,7 +494,8 @@ function buyCell(t, ngay, mv, br, fresh) {
   if (!fresh) return `<span class="old">nhập giá ${ngay === today() ? 'hôm nay' : 'ngày ' + fmtD(ngay)}</span>`;
   const b = buyInfo(t, br, mv, ngay);
   const few = b.days < 14 ? `<br><span class="small old">(mới có ${b.days} ngày giá)</span>` : '';
-  if (b.kind === 'full') return `⛔ <b>Đủ hạn mức</b><br><span class="small muted">vốn đang giữ ${fmtTr(b.held)} / ${fmtTr(b.limit)}</span>`;
+  if (b.kind === 'full') return `⛔ <b>Đủ hạn mức</b><br><span class="small muted">${b.held >= b.limit ? `vốn đang giữ ${fmtTr(b.held)} / ${fmtTr(b.limit)}`
+    : `còn ${fmtTr(b.left)}, chưa đủ 1 món ${fmtW(b.itemDem)} (${fmtTr(b.itemPrice)})`}</span>`;
   if (b.kind === 'wait') return `🟠 <b>Đợi, chênh lệch cao</b><br><span class="small muted">mua hôm nay cần tăng ${fmtP(b.spread, false)} mới hòa vốn, thường ${fmtP(b.usual, false)}</span>` + few;
   if (b.kind === 'consider') return `🟡 <b>Cân nhắc</b><br><span class="small muted">đang có lô ${b.chot.map(s => esc(s.lot.id)).join(', ')} nên chốt: chốt lô đó, hoặc giữ nó thay cho mua thêm</span>` + few;
   if (b.kind === 'rebuy') return `🟢 <b>Mua lại</b> <button type="button" class="sm primary" data-act="rebuy" data-id="${esc(b.rb.id)}">Mua lại…</button><br><span class="small muted">chạm giá bạn đặt khi bán ${esc(b.rb.id)} (${fmtTr(b.rebuyMark)})</span>` + few;
@@ -707,7 +712,7 @@ function homRest() {
   const priced = sts.filter(s => s.hasPrice), noPrice = sts.filter(s => !s.hasPrice);
   const sumV = priced.reduce((a, s) => a + s.V, 0), sumG = priced.reduce((a, s) => a + s.G, 0), rz = realizedTotal();
   html += card('', `<div class="stats">
-    <div class="stat"><span>Vốn đang giữ</span><b>${fmtM(sumV)}</b></div>
+    <div class="stat"><span>Vốn đang giữ</span><b>${fmtM(sumV)}</b>${(lim => lim ? (left => `<span>/ hạn mức ${fmtTr(lim)} · ${left >= 0 ? 'còn ' + fmtTr(left) : 'vượt ' + fmtTr(-left)}</span>`)(lim - sts.reduce((a, s) => a + s.V, 0)) : '')(D.tham_so.vang_han_muc_von)}</div>
     <div class="stat"><span>Giá trị hôm nay</span><b>${fmtM(sumG)}</b></div>
     <div class="stat"><span>Lời tạm tính</span><b class="${cls(sumG - sumV)}">${fmtMS(sumG - sumV)}</b><span>${fmtP(sumV ? sumG / sumV - 1 : null)}</span></div>
     <div class="stat"><span>Lời đã chốt (từ trước đến nay)</span><b class="${cls(rz)}">${fmtMS(rz)}</b></div>
@@ -1037,6 +1042,11 @@ function dlgLot(lot, prefill) {
         const dg = tong / (n * wd / UNIT_DEM[unit]);
         if (p && p.ban_ra && f.ngay.value >= p.ngay && Math.abs(dg / p.ban_ra - 1) > 0.15 &&
           !confirm(`Đơn giá ${fmtM(dg)}/${UNIT_NAME[unit]} lệch ${fmtP(dg / p.ban_ra - 1)} so với giá tiệm bán ra ngày ${fmtD(p.ngay)} (${fmtM(p.ban_ra)}). Giá này có đúng không?`)) return false;
+      }
+      const lim = D.tham_so.vang_han_muc_von;
+      if (!isEdit && lim) {
+        const after = openLots().reduce((a, l) => a + lotState(l).V, 0) + tong;
+        if (after > lim && !confirm(`Vốn đang giữ sẽ lên ${fmtTr(after)}, vượt hạn mức ${fmtTr(lim)}. Vẫn lưu?`)) return false;
       }
       if (loai === '__new') {
         loai = 't' + Date.now().toString(36);
