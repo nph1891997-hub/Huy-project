@@ -1138,7 +1138,7 @@ function dlgLot(lot, prefill) {
     <div class="row"><label class="field"><span>% kỳ vọng</span><input type="number" step="0.1" name="kv" value="${lot.ky_vong_pct}"></label></div>
     <details${lot.ghi_chu || lot.sap_dat_pct !== T.vang_sap_dat_mac_dinh || typeof lot.nhac_tut_pct === 'number' ? ' open' : ''}><summary>Tùy chọn khác: mức báo sắp đạt, nhắc khi lời tụt, ghi chú</summary>
       <div class="row"><label class="field"><span>Báo "sắp đạt" khi giá còn cần tăng ≤ (%)</span><input type="number" step="0.1" name="sd" value="${lot.sap_dat_pct}"></label>
-      <label class="field"><span>Nhắc chốt nếu lời tụt về (%)</span><input type="number" step="0.1" name="nt" value="${lot.nhac_tut_pct ?? ''}" placeholder="trống = không nhắc"${latestPrice(lot.loai_id) ? '' : ' disabled title="Loại này chưa có giá, chưa đặt được mức nhắc"'}></label>
+      <label class="field" id="ntField"><span>Nhắc chốt nếu lời tụt về (%)</span><input type="number" step="0.1" name="nt" value="${lot.nhac_tut_pct ?? ''}" placeholder="trống = không nhắc"${latestPrice(lot.loai_id) ? '' : ' disabled title="Loại này chưa có giá, chưa đặt được mức nhắc"'}></label>
       <label class="field" style="flex:1"><span>Ghi chú</span><input name="ghi_chu" value="${esc(lot.ghi_chu)}" placeholder="Nơi mua, số seri…"></label></div></details>
     <div class="dlg-actions"><button value="cancel" type="submit" formnovalidate>Hủy</button><button class="primary" type="submit">Lưu</button></div>`,
     f => {
@@ -1155,7 +1155,7 @@ function dlgLot(lot, prefill) {
       if (!(parseN(f.kv.value) > 0)) return alert('% kỳ vọng phải lớn hơn 0.'), false;
       if (parseN(f.sd.value) < 0) return alert('Mức báo sắp đạt không được âm.'), false;
       const unitSel = loai === '__new' ? f.dv_moi.value : typeById(loai)?.don_vi_niem_yet;
-      const ntRaw = f.nt.disabled ? String(lot.nhac_tut_pct ?? '') : f.nt.value.trim();
+      const ntRaw = f.nt.disabled || $('#ntField').classList.contains('hidden') ? String(lot.nhac_tut_pct ?? '') : f.nt.value.trim();
       if (ntRaw !== '' && (!isEdit || parseN(ntRaw) !== lot.nhac_tut_pct)) {   // chỉ xét khi đặt mức mới
         const nt = parseN(ntRaw), p = loai === '__new' ? null : latestPrice(loai);
         if (!(nt > 0)) return alert('Mức nhắc khi lời tụt phải lớn hơn 0, hoặc để trống.'), false;
@@ -1188,7 +1188,15 @@ function dlgLot(lot, prefill) {
         D.vang.lo.push(Object.assign({ id: nextLotId(data.ngay_mua.slice(0, 4)) }, data));
       }
       if (fromSale) { const b = D.vang.ban.find(x => x.id === fromSale); if (b) b.gia_mua_lai = null; }
-      commit(isEdit ? 'sửa lô ' + lot.id : 'thêm lô ' + D.vang.lo.at(-1).id);
+      // Đã mua lô cùng loại sau khi bán (bằng + Thêm lô, Mua…): các nhắc mua lại của loại này coi như xong, như khi bấm Mua lại…
+      const off = isEdit ? [] : D.vang.ban.filter(b => b.gia_mua_lai > 0 && b.ngay <= data.ngay_mua && lotById(b.lo_id)?.loai_id === loai).map(b => ({ id: b.id, gia: b.gia_mua_lai }));
+      for (const x of off) D.vang.ban.find(b => b.id === x.id).gia_mua_lai = null;
+      const newId = D.vang.lo.at(-1).id;
+      commit(isEdit ? 'sửa lô ' + lot.id : 'thêm lô ' + newId);
+      if (off.length) {
+        ui.rebuyOff = off;
+        setNotice(`Đã tắt nhắc mua lại ${off.map(x => `${esc(x.id)} (${fmtTr(x.gia)})`).join(', ')} vì vừa mua ${esc(newId)} cùng loại. <button class="sm" data-act="rebuy-keep">Giữ lại nhắc</button>`);
+      }
     },
     (f, e) => {
       const isNew = f.loai.value === '__new';
@@ -1211,9 +1219,16 @@ function dlgLot(lot, prefill) {
       // Lô mới: tự điền đơn giá = giá tiệm bán ra mới nhất của loại, cho tới khi bạn tự gõ giá
       if (tgt === 'don_gia' || tgt === 'tong') autoPrice = false;
       if (autoPrice && !isNew) { const p = latestPrice(f.loai.value); f.don_gia.value = p && p.ban_ra && f.ngay.value >= p.ngay ? fmtIn(p.ban_ra) : ''; last = 'dg'; }
-      if (!qty) return;
-      if (last === 'dg') f.tong.value = fmtIn(parseM(f.don_gia.value) * qty);
-      else if (tgt !== 'don_gia') f.don_gia.value = fmtIn(parseM(f.tong.value) / qty);
+      if (qty) {
+        if (last === 'dg') f.tong.value = fmtIn(parseM(f.don_gia.value) * qty);
+        else if (tgt !== 'don_gia') f.don_gia.value = fmtIn(parseM(f.tong.value) / qty);
+      }
+      // Lô mới: ô mức nhắc chỉ hiện khi lô đang lời (thường là nhập lại lô mua từ lâu);
+      // lô vừa mua đang lỗ chênh lệch thì nhập mức nào cũng bị từ chối, nên ẩn đi
+      if (!isEdit) {
+        const p = !isNew && latestPrice(f.loai.value), unitCost = qty ? parseM(f.tong.value) / qty : 0;
+        $('#ntField').classList.toggle('hidden', !(p && unitCost && p.mua_vao / unitCost - 1 > EPS));
+      }
     });
 }
 
@@ -1326,6 +1341,14 @@ const act = {
   buy: d => { const f = $('#priceForm'); dlgLot(null, { loai_id: d.id, don_gia: (f && parseM(f['br_' + d.id].value)) || latestPrice(d.id)?.ban_ra }); },
   'prices-all': () => { ui.lsAllPrices = true; render(); },
   'sale-del': d => { if (confirm('Xóa lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); commit('xóa lần bán ' + d.id); } },
+  // Bật lại các nhắc mua lại vừa tự tắt khi thêm lô (lô mới vẫn giữ)
+  'rebuy-keep': () => {
+    const off = (ui.rebuyOff || []).map(x => ({ x, b: D.vang.ban.find(b => b.id === x.id) })).filter(y => y.b);
+    ui.rebuyOff = null; ui.notice = '';
+    if (!off.length) return render();
+    for (const { x, b } of off) b.gia_mua_lai = x.gia;
+    commit('giữ lại nhắc mua lại ' + off.map(y => y.x.id).join(', '));
+  },
   'rebuy-clear': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) { b.gia_mua_lai = null; commit('bỏ nhắc mua lại ' + b.id); } },
   'price-del': d => { const p = D.vang.gia[+d.i]; if (p && confirm('Xóa dòng giá ngày ' + fmtD(p.ngay) + '?')) { D.vang.gia.splice(+d.i, 1); commit('xóa giá ngày ' + fmtD(p.ngay)); } },
   'type-del': d => { if (confirm('Xóa loại vàng này cùng lịch sử giá của nó?')) { D.vang.loai = D.vang.loai.filter(t => t.id !== d.id); D.vang.gia = D.vang.gia.filter(p => p.loai_id !== d.id); commit('xóa loại vàng'); } },
@@ -1412,7 +1435,7 @@ const act = {
 };
 // Chế độ xem: các thao tác làm thay đổi dữ liệu bị ẩn (CSS body.view) và chặn luôn ở đây
 const EDIT_ACTS = new Set(['lot-add', 'lot-edit', 'lot-del', 'sell', 'hold', 'sale-edit', 'sale-del', 'rebuy', 'rebuy-clear', 'price-del', 'type-del',
-  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect', 'gate-local', 'gate-restore', 'gate-restore-go']);
+  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect', 'gate-local', 'gate-restore', 'gate-restore-go', 'rebuy-keep']);
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled && !(VIEW && EDIT_ACTS.has(b.dataset.act))) act[b.dataset.act](b.dataset, b); });
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
