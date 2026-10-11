@@ -1000,15 +1000,20 @@ function cashPlans(X) {
     for (let i = rows.length - 1; i >= 0; i--) while (rows[i].k > 0 && have - rows[i].s.valMon >= X) { rows[i].k--; have -= rows[i].s.valMon; }
     return rows.filter(x => x.k > 0);
   };
+  // Thứ tự chung: lô lời → lô lời của loại đang bị tiệm hạ giá mua vào (bán lúc này thiệt hơn ngày thường) → lô lỗ.
+  // Trong từng nhóm lô lời thì theo thứ tự riêng của phương án
+  const ok = prof.filter(s => !s.cut), cut = prof.filter(s => s.cut);
+  const plan = by => prune([ok.slice().sort(by), cut.slice().sort(by), loss].reduce((rows, order) => fill(order, rows), []));
   // A: lô ở nhóm Nên chốt trước (đạt mục tiêu, hoặc lời tụt dưới mức nhắc), như tab Hôm nay đang báo
-  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => (b.grp === 'chot') - (a.grp === 'chot') || b.g - a.g))));
-  const single = prof.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
+  const A = plan((a, b) => (b.grp === 'chot') - (a.grp === 'chot') || b.g - a.g);
+  // B: một lô lời (không bị hạ giá mua vào) bán vừa đủ mà dư ít nhất; không có thì lấy lô có giá trị còn lại lớn → nhỏ
+  const single = ok.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
     .sort((a, b) => (a.k * a.s.valMon - X) - (b.k * b.s.valMon - X));
-  const B = single.length ? [single[0]] : prune(fill(loss, fill(prof.slice().sort((a, b) => b.n * b.valMon - a.n * a.valMon))));
-  const C = prune(fill(loss, fill(prof.slice().sort((a, b) => a.g - b.g))));
+  const B = single.length ? [single[0]] : plan((a, b) => b.n * b.valMon - a.n * a.valMon);
+  const C = plan((a, b) => a.g - b.g);
   const toPlan = (name, desc, rows) => ({ name, desc, rows: rows.map(x => ({ id: x.s.lot.id, k: x.k })) });
   const plans = [
-    toPlan('A. Chốt lời tốt nhất', 'Lô đạt mục tiêu trước, rồi lô lời % cao nhất', A),
+    toPlan('A. Chốt lời tốt nhất', 'Lô nên chốt trước, rồi lô lời % cao nhất', A),
     toPlan('B. Ít lô nhất', 'Ưu tiên một lô bán vừa đủ, hạn chế cắt lẻ nhiều lô', B),
     toPlan('C. Giữ lô tốt', 'Bán lô lời ít trước, giữ lô lời nhiều cho chạy tiếp', C)
   ];
