@@ -92,6 +92,8 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+const addDays = (iso, n) => new Date(Date.parse(iso) + n * 864e5).toISOString().slice(0, 10);
+const median = a => { const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
 const fmtD = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
 const digits = x => (x == null || x === '' || isNaN(x)) ? '' : Math.round(x).toLocaleString('vi-VN');
 // Nhập tiền: "118.500.000", "118500000", "118,5" hoặc "118.5" (số nhỏ hơn 1.000 hiểu là triệu), "118,5tr", "500k"
@@ -107,6 +109,7 @@ function parseM(s) {
 }
 const parseN = s => { const v = Number(String(s ?? '').replace(',', '.')); return isNaN(v) ? 0 : v; };
 const fmtM = x => (x == null || isNaN(x)) ? '—' : Math.round(x).toLocaleString('vi-VN') + ' đ';
+const fmtTr = x => x >= 1e6 ? (x / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: x >= 1e8 ? 1 : 2 }) + 'tr' : digits(x) + 'đ';
 const fmtMS = x => (x == null || isNaN(x)) ? '—' : (x > 0.5 ? '+' : '') + fmtM(x);
 const fmtP = (x, sign = true) => (x == null || isNaN(x) || !isFinite(x)) ? '—' :
   (sign && x > 0 ? '+' : '') + (x * 100).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
@@ -124,7 +127,7 @@ function splitW(dem) { const o = {}; let r = dem; for (const [k, v] of UNITS) { 
 function emptyData() {
   return {
     phien_ban: 1, cap_nhat: '',
-    tham_so: { lai_suat_ngan_hang: 5.5, lam_phat: 3.5, vang_ky_vong_mac_dinh: 15, vang_sap_dat_mac_dinh: 2 },
+    tham_so: { lai_suat_ngan_hang: 5.5, lam_phat: 3.5, vang_ky_vong_mac_dinh: 15, vang_sap_dat_mac_dinh: 2, vang_mua_giam_pct: 5, vang_han_muc_von: null },
     vang: { loai: [], gia: [], lo: [], ban: [], so_thu_tu: { lo: {}, ban: 0 } },
     tiet_kiem: [], cctg: [], dat: []
   };
@@ -290,6 +293,49 @@ function nextSaleId() {
   D.vang.so_thu_tu.ban = Math.max(D.vang.so_thu_tu.ban || 0, ...used) + 1;
   return 'B-' + String(D.vang.so_thu_tu.ban).padStart(4, '0');
 }
+// Gợi ý mua thêm cho một loại (đặc tả mục 3.5). q, p: giá tiệm bán ra, mua vào của ngày `ngay` (giá vừa gõ cũng tính).
+// Phía mua dùng giá tiệm bán ra (giá mình phải trả). Cửa sổ 90 ngày tính tới `ngay`.
+function buyInfo(t, q, p, ngay) {
+  if (!q) return null;
+  const X = D.tham_so.vang_mua_giam_pct / 100, from = addDays(ngay, -90);
+  const rows = D.vang.gia.filter(r => r.loai_id === t.id && r.ban_ra && r.ngay > from && r.ngay < ngay).map(r => ({ ngay: r.ngay, q: r.ban_ra, p: r.mua_vao }));
+  const win = rows.concat({ ngay, q, p });
+  const peak = win.reduce((a, r) => r.q > a.q ? r : a);
+  const lot = D.vang.lo.filter(l => l.loai_id === t.id && l.ngay_mua > from && l.ngay_mua <= ngay)
+    .sort((a, b) => b.ngay_mua.localeCompare(a.ngay_mua) || b.id.localeCompare(a.id))[0];
+  const lastUnit = lot ? lot.tong_tien_mua / (lot.so_mon * lotW(lot)) : null;
+  const mDinh = peak.q * (1 - X), mRai = lastUnit ? lastUnit * (1 - X) : null;
+  const entry = mRai != null ? Math.min(mDinh, mRai) : mDinh;
+  const spread = p ? q / p - 1 : null, spreads = rows.map(r => r.q / r.p - 1);
+  const usual = spreads.length >= 10 ? median(spreads) : null;
+  const held = openLots().reduce((a, l) => a + lotState(l).V, 0), limit = D.tham_so.vang_han_muc_von || null;
+  const mine = openLots().filter(l => l.loai_id === t.id).map(l => lotState(l));
+  const avg = mine.length ? mine.reduce((a, s) => a + s.V, 0) / mine.reduce((a, s) => a + s.n * s.w, 0) : null;
+  const b = { t, q, p, ngay, X, win, peak, lot, lastUnit, mDinh, mRai, entry, gap: 1 - entry / q, drop: q / peak.q - 1,
+    spread, usual, held, limit, avg, days: new Set(win.map(r => r.ngay)).size };
+  b.kind = limit && held >= limit ? 'full' : usual != null && spread > 1.5 * usual ? 'wait' : q <= entry ? 'buy' : 'notyet';
+  if (limit) { b.left = limit - held; const dem = b.left / q * UNIT_DEM[t.don_vi_niem_yet]; b.leftDem = dem >= 1000 ? Math.floor(dem / 1000) * 1000 : Math.floor(dem / 100) * 100; }
+  return b;
+}
+function buyCell(t, ngay, mv, br, fresh) {
+  if (!br) return '<span class="muted">—</span>';
+  if (!fresh) return `<span class="old">nhập giá ${ngay === today() ? 'hôm nay' : 'ngày ' + fmtD(ngay)}</span>`;
+  const b = buyInfo(t, br, mv, ngay);
+  if (b.kind === 'full') return `⛔ <b>Đủ hạn mức</b><br><span class="small muted">vốn đang giữ ${fmtTr(b.held)} / ${fmtTr(b.limit)}</span>`;
+  if (b.kind === 'wait') return `🟠 <b>Đợi, chênh lệch cao</b><br><span class="small muted">mua hôm nay cần tăng ${fmtP(b.spread, false)} mới hòa vốn, thường ${fmtP(b.usual, false)}</span>`;
+  if (b.kind === 'buy') return `🟢 <b>Vùng mua</b> <button type="button" class="sm primary" data-act="buy" data-id="${esc(t.id)}">Mua…</button>` +
+    (b.limit ? `<br><span class="small muted">còn ${fmtTr(b.left)} trong hạn mức ≈ ${fmtW(b.leftDem)}</span>` : '');
+  return `⚪ Chưa tới<br><span class="small muted">mua khi bán ra ≤ ${fmtTr(b.entry)} (còn cách ${fmtP(b.gap, false)})</span>`;
+}
+// Tính lại cột Mua thêm? theo giá đang gõ trong bảng giá (chưa cần bấm Cập nhật)
+function refreshBuy(f) {
+  for (const t of D.vang.loai) {
+    const el = document.getElementById('buy_' + t.id); if (!el) continue;
+    const lp = latestPrice(t.id), mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
+    const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
+    el.innerHTML = buyCell(t, f.ngay.value, mv, br, (lp && lp.ngay === f.ngay.value) || changed || f['kd_' + t.id]?.checked);
+  }
+}
 const openLots = () => D.vang.lo.filter(l => l.so_mon - soldMon(l.id) > 0);
 const realizedTotal = () => D.vang.ban.reduce((a, b) => { const c = saleCalc(b); return a + (c ? c.loi : 0); }, 0);
 const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(s.n, Math.max(1, Math.ceil(s.V / s.valMon))) };
@@ -338,11 +384,12 @@ function viewHomNay() {
     return `<tr class="prow"><td class="c-ten">${esc(t.ten)}</td><td class="c-dv">${UNIT_NAME[t.don_vi_niem_yet]}</td>
       <td class="c-mv"><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="VD: 118,5"></td>
       <td class="c-br"><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="VD: 120" data-spread="${p && p.ban_ra ? p.ban_ra - p.mua_vao : ''}"></td>
-      <td class="n c-be">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td><td class="small c-note ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
+      <td class="n c-be">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td>
+      <td class="c-buy" id="buy_${esc(t.id)}">${buyCell(t, today(), p?.mua_vao, p?.ban_ra, p && p.ngay === today())}</td><td class="small c-note ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
       <td class="c-kd">${p ? `<label class="small kd ${p.ngay < today() ? '' : 'hidden'}" data-pngay="${p.ngay}"><input type="checkbox" name="kd_${esc(t.id)}"> Không đổi</label>` : ''}</td></tr>`;
   }).join('');
   let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" max="${today()}" required></label></div>
-    <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${priceRows}</table></div>
+    <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${priceRows}</table></div>
     <div class="row" style="margin-top:10px"><button class="primary" type="submit">Cập nhật giá</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>`);
 
   const sts = openLots().map(l => lotState(l));
@@ -573,6 +620,9 @@ function viewThamSo() {
   return card('Tham số chung', `<div class="row">${f('lai_suat_ngan_hang', 'Lãi suất ngân hàng tham chiếu (%/năm)')}${f('lam_phat', 'Lạm phát (%/năm)')}
       ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', 'Báo sắp đạt khi giá còn cần tăng ≤ (%)')}</div>
     <p class="muted small">So sánh với ngân hàng dùng lãi đơn và lãi suất hiện tại cho toàn bộ thời gian giữ, nên chỉ mang tính tham khảo với lô giữ lâu.</p>`) +
+    card('Mua thêm', `<div class="row">${f('vang_mua_giam_pct', 'Mua thêm khi giá giảm từ đỉnh 90 ngày ≥ (%)')}
+      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${T.vang_han_muc_von ? digits(T.vang_han_muc_von) : ''}" placeholder="không giới hạn" style="width:200px"></label></div>
+    <p class="muted small">App không đoán giá. Vùng mua: giá tiệm bán ra thấp hơn đỉnh 90 ngày ít nhất bấy nhiêu %; đã mua loại đó trong 90 ngày thì lần sau phải rẻ hơn lần mua gần nhất bấy nhiêu % nữa. Chênh lệch mua–bán cao bất thường thì gợi ý đợi; vốn đang giữ chạm hạn mức thì thôi gợi ý mua.</p>`) +
     card('Loại vàng', `<table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
       ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"></td>
         <td><select data-type-unit="${esc(t.id)}" ${used(t.id) ? 'disabled title="Loại đã có lô hoặc giá, không đổi đơn vị được"' : ''}>
@@ -618,11 +668,11 @@ function dlgLot(lot, prefill) {
   // loại chưa có lô nào (kể cả loại mới tạo trong form) thì 1 đơn vị niêm yết của loại
   const lastW = (typeId, newUnit = 'luong') => [...D.vang.lo].reverse().find(l => l.loai_id === typeId)?.trong_luong_mon_dem ||
     UNIT_DEM[typeId === '__new' ? newUnit : typeById(typeId)?.don_vi_niem_yet || 'chi'];
-  const defType = D.vang.lo.at(-1)?.loai_id || D.vang.loai[0]?.id || '__new';
+  const defType = prefill?.loai_id || D.vang.lo.at(-1)?.loai_id || D.vang.loai[0]?.id || '__new';
   lot = lot || Object.assign({ ngay_mua: today(), loai_id: defType, so_mon: 1, trong_luong_mon_dem: lastW(defType), tong_tien_mua: 0, ky_vong_pct: T.vang_ky_vong_mac_dinh, sap_dat_pct: T.vang_sap_dat_mac_dinh, ghi_chu: '' }, prefill || {});
   // wTouched: đã gõ trọng lượng, không tự đổi theo loại nữa. wPrefill: trọng lượng đang là số điền sẵn,
   // lần đầu gõ vào một ô thì xóa các ô còn lại (tránh 1 chỉ điền sẵn + gõ 1 lượng = 1 lượng 1 chỉ)
-  let last = 'tong', autoPrice = !isEdit, wTouched = isEdit || !!(prefill && prefill.trong_luong_mon_dem), wPrefill = !isEdit;
+  let last = prefill?.don_gia ? 'dg' : 'tong', autoPrice = !isEdit && !prefill?.don_gia, wTouched = isEdit || !!(prefill && prefill.trong_luong_mon_dem), wPrefill = !isEdit;
   openDlg(`<h2>${isEdit ? 'Sửa lô ' + esc(lot.id) : fromSale ? 'Mua lại (từ lần bán ' + esc(fromSale) + ')' : 'Thêm lô vàng'}</h2>
     <div class="row"><label class="field"><span>Ngày mua</span><input type="date" name="ngay" value="${lot.ngay_mua}" max="${today()}" required></label>
       <label class="field"><span>Loại vàng</span><select name="loai">${typeOptions(lot.loai_id)}<option value="__new" ${lot.loai_id === '__new' ? 'selected' : ''}>➕ Loại mới…</option></select></label></div>
@@ -631,7 +681,7 @@ function dlgLot(lot, prefill) {
     <div class="row"><label class="field"><span>Số món</span><input type="number" min="1" name="so_mon" value="${lot.so_mon}" style="width:70px"></label>
       <span style="padding-bottom:6px">×</span> ${wInputs('w', lot.trong_luong_mon_dem)}</div>
     <p id="wInfo"></p>
-    <div class="row"><label class="field"><span id="dgLabel">Đơn giá</span><input class="money" name="don_gia"></label>
+    <div class="row"><label class="field"><span id="dgLabel">Đơn giá</span><input class="money" name="don_gia" value="${prefill?.don_gia ? digits(prefill.don_gia) : ''}"></label>
       <label class="field"><span>Tổng tiền mua</span><input class="money" name="tong" value="${digits(lot.tong_tien_mua) || ''}"></label></div>
     <div class="row"><label class="field"><span>% kỳ vọng</span><input type="number" step="0.1" name="kv" value="${lot.ky_vong_pct}"></label></div>
     <details${lot.ghi_chu || lot.sap_dat_pct !== T.vang_sap_dat_mac_dinh || typeof lot.nhac_tut_pct === 'number' ? ' open' : ''}><summary>Tùy chọn khác: mức báo sắp đạt, nhắc khi lời tụt, ghi chú</summary>
@@ -806,6 +856,7 @@ const act = {
     const b = D.vang.ban.find(x => x.id === d.id), lot = b && lotById(b.lo_id); if (!lot) return;
     dlgLot(null, { loai_id: lot.loai_id, trong_luong_mon_dem: lot.trong_luong_mon_dem, so_mon: b.so_mon, fromSale: b.id });
   },
+  buy: d => { const f = $('#priceForm'); dlgLot(null, { loai_id: d.id, don_gia: (f && parseM(f['br_' + d.id].value)) || latestPrice(d.id)?.ban_ra }); },
   'prices-all': () => { ui.lsAllPrices = true; render(); },
   'sale-del': d => { if (confirm('Xóa lần bán ' + d.id + '? Số món sẽ được trả lại cho lô.')) { D.vang.ban = D.vang.ban.filter(b => b.id !== d.id); commit('xóa lần bán ' + d.id); } },
   'rebuy-clear': d => { const b = D.vang.ban.find(x => x.id === d.id); if (b) { b.gia_mua_lai = null; commit('bỏ nhắc mua lại ' + b.id); } },
@@ -847,6 +898,7 @@ document.addEventListener('input', e => {
     const br = f['br_' + el.name.slice(3)], mv = parseM(el.value);
     if (br && !br.dataset.touched && br.dataset.spread !== '' && mv) br.value = digits(mv + Number(br.dataset.spread));
   }
+  refreshBuy(f);
 });
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, textarea, select') && !dlg.open) { e.preventDefault(); undo(); }
@@ -896,7 +948,12 @@ document.addEventListener('change', e => {
   if (el.id === 'loStatus') { ui.loStatus = el.value; render(); }
   else if (el.id === 'loType') { ui.loType = el.value; render(); }
   else if (el.id === 'lsYear') { ui.lsYear = el.value; render(); }
-  else if (el.dataset.set) { D.tham_so[el.dataset.set] = parseN(el.value); commit('sửa tham số'); }
+  else if (el.dataset.set) {
+    const v = parseN(el.value);
+    if (el.dataset.set === 'vang_mua_giam_pct' && !(v > 0)) { alert('% giảm từ đỉnh phải lớn hơn 0.'); return render(); }
+    D.tham_so[el.dataset.set] = v; commit('sửa tham số');
+  }
+  else if (el.dataset.setMoney) { const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
   else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit('đổi tên loại vàng'); } }
   else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit('đổi đơn vị loại vàng'); } }
   else if (el.dataset.plan != null && el.dataset.row != null) {
