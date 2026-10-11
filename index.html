@@ -442,6 +442,16 @@ function usualSpread(typeId, ngay) {
   }
   return c.us.get(k);
 }
+// Giá mua vào của lần nhập gần nhất trước `ngay` mà chênh lệch không cao: mốc để biết tiệm hạ giá mua vào hay nâng giá bán ra
+function normalBuy(typeId, ngay, usual) {
+  const c = cache(), k = typeId + '|' + ngay; c.nb ||= new Map();
+  if (!c.nb.has(k)) {
+    let best = null;
+    for (const r of D.vang.gia) if (r.loai_id === typeId && r.ban_ra && r.ngay < ngay && r.ban_ra / r.mua_vao - 1 <= 1.5 * usual && (!best || r.ngay > best.ngay)) best = r;
+    c.nb.set(k, best ? best.mua_vao : null);
+  }
+  return c.nb.get(k);
+}
 const EPS = 1e-6;   // so sánh % lời bỏ qua sai số tính toán (lô vốn 100tr, giá 115tr: máy tính ra 14,999…%)
 const soldMon = lotId => cache().sold.get(lotId) || 0;
 function lotW(lot) { const t = typeById(lot.loai_id); return lot.trong_luong_mon_dem / UNIT_DEM[t ? t.don_vi_niem_yet : 'chi']; }
@@ -475,6 +485,12 @@ function lotState(lot, asOf = today()) {
   // Chênh lệch cao bất thường thì phần lỗ là thật: bán lúc này thiệt hơn hẳn mọi khi
   const notBelow = s.g < 0 && !!p.ban_ra && p.ban_ra >= s.costUnit - 0.5;
   s.spreadLoss = notBelow && !s.spreadHigh; s.wideLoss = notBelow && s.spreadHigh;
+  // Tiệm hạ giá mua vào (chênh lệch cao và giá mua vào thấp hơn lần nhập gần nhất có chênh lệch bình thường): bán hôm nay thiệt hơn ngày thường.
+  // Chênh lệch cao vì tiệm nâng giá bán ra thì giá mua vào không giảm, bán không thiệt: không ghi gì
+  if (s.spreadHigh) {
+    const pm = normalBuy(lot.loai_id, p.ngay, s.spreadUsual);
+    if (pm && s.P < pm) { const Ps = p.ban_ra / (1 + s.spreadUsual); s.cut = { Ps, unitLoss: w * (Ps - s.P), gNormal: Ps / s.costUnit - 1 }; }
+  }
   s.grp = s.reached || s.tut ? 'chot' : s.g < 0 && !s.spreadLoss ? 'lo' : s.g >= 0 && s.needUp <= s.sd + EPS ? 'sap' : 'giu';
   return s;
 }
@@ -484,6 +500,8 @@ function peakSince(lot, costUnit) {
   for (const p of D.vang.gia) if (p.loai_id === lot.loai_id && p.ngay >= lot.ngay_mua && (!best || p.mua_vao > best.mua_vao)) best = p;
   return best && { g: best.mua_vao / costUnit - 1, ngay: best.ngay };
 }
+// Tiệm đang hạ giá mua vào: bán k món hôm nay được ít hơn ngày thường bao nhiêu
+const cutText = (s, k = s.n, what = 'hôm nay') => `tiệm đang hạ giá mua vào, chênh lệch ${fmtP(s.spreadNow, false)} (thường ${fmtP(s.spreadUsual, false)}): bán ${what} được ít hơn ngày thường khoảng ${NFP.format(k * s.cut.unitLoss / 1e6)}tr`;
 const tutText = s => { const pk = peakSince(s.lot, s.costUnit);
   return `lời tụt ${pk ? `từ ${fmtP(pk.g)} (${fmtD(pk.ngay).slice(0, 5)}) ` : ''}về ${fmtP(s.g)}${s.g < 0 ? ' (đã lỗ)' : ''}, dưới mức nhắc ${fmtP(s.nt, false)}`; };
 function saleCalc(sale, lot = lotById(sale.lo_id)) {
@@ -835,7 +853,8 @@ function homRest() {
   return html;
 }
 const GROUPS = [
-  ['chot', '🟢 Nên chốt — đã đạt mục tiêu', s => (s.tut ? `<span class="old">${tutText(s)}</span> ` : '') +
+  ['chot', '🟢 Nên chốt — đã đạt mục tiêu', s => (n => n ? `<span class="old">${n}</span> ` : '')([s.tut && tutText(s),
+    s.cut && cutText(s) + (s.tut && s.cut.gNormal >= s.nt - EPS ? `; nếu chênh lệch như mọi khi, lời là ${fmtP(s.cut.gNormal)}, chưa dưới mức nhắc; không gấp thì đợi` : '')].filter(Boolean).join('; ')) +
     `<button class="sm primary" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>
      <button class="sm" data-act="hold" data-id="${esc(s.lot.id)}">${s.tut ? 'Giữ tiếp' : 'Giữ, nâng mục tiêu'}</button>`],
   ['sap', '🟡 Sắp đạt — theo dõi', s => `giá cần tăng ${fmtP(s.needUp, false)} (lên ${fmtM(s.targetPrice)}/${UNIT_NAME[s.t.don_vi_niem_yet]}) <button class="sm" data-act="sell" data-id="${esc(s.lot.id)}">Bán…</button>`],
@@ -946,19 +965,19 @@ function cashPlans(X) {
   return plans;
 }
 function planSummary(plan, X) {
-  let thu = 0, von = 0, lossLoi = 0, lossVsBank = 0, valid = true;
+  let thu = 0, von = 0, lossLoi = 0, lossVsBank = 0, cutLoss = 0, valid = true;
   const rows = plan.rows.map(r => {
     const lot = lotById(r.id); const s = lotState(lot);
     if (r.k > s.n || r.k < 0) valid = false;
     const t = r.k * s.valMon, v = r.k * s.costMon, bank = v * (1 + r_() * s.d / 365);
-    thu += t; von += v;
+    thu += t; von += v; if (s.cut) cutLoss += r.k * s.cut.unitLoss;
     if (t - v < 0) { lossLoi += t - v; lossVsBank += t - bank; }
     return { r, s, t, v, loi: t - v };
   });
   const totalDem = openLots().reduce((a, l) => a + (l.so_mon - soldMon(l.id)) * l.trong_luong_mon_dem, 0) -
     rows.reduce((a, x) => a + x.r.k * x.s.lot.trong_luong_mon_dem, 0);
   const totalV = openLots().reduce((a, l) => a + lotState(l).V, 0) - von;
-  return { rows, thu, von, loi: thu - von, du: thu - X, lossLoi, lossVsBank, totalDem, totalV, valid };
+  return { rows, thu, von, loi: thu - von, du: thu - X, lossLoi, lossVsBank, cutLoss, totalDem, totalV, valid };
 }
 const r_ = () => r();
 function viewCanTien() {
@@ -972,6 +991,8 @@ function viewCanTien() {
   if (totalAvail < X) html += `<div class="warn">⚠️ Bán hết tất cả các lô (có giá) cũng chỉ được ${fmtM(totalAvail)}, còn thiếu <b>${fmtM(X - totalAvail)}</b>.</div>`;
   const oldTypes = [...new Set(ui.plans.flatMap(p => p.rows.map(r => lotById(r.id)?.loai_id)))].map(id => ({ t: typeById(id), p: latestPrice(id) })).filter(x => x.t && x.p && x.p.ngay < today());
   if (oldTypes.length) html += `<div class="warn">⚠️ Đang dùng giá cũ: ${oldTypes.map(x => `${esc(x.t.ten)} (ngày ${fmtD(x.p.ngay)})`).join(', ')}. Nên cập nhật giá ở tab Hôm nay trước khi bán.</div>`;
+  const cutTypes = new Map(openLots().map(l => lotState(l)).filter(s => s.cut).map(s => [s.lot.loai_id, s]));
+  if (cutTypes.size) html += `<div class="warn">⚠️ Tiệm đang hạ giá mua vào: ${[...cutTypes.values()].map(s => `${esc(s.t.ten)}, chênh lệch ${fmtP(s.spreadNow, false)} (thường ${fmtP(s.spreadUsual, false)})`).join('; ')}. Bán lúc này được ít hơn ngày thường, không gấp thì đợi.</div>`;
   const dup = ui.plans.filter(p => p.same);
   if (dup.length) html += `<p class="muted small">${dup.map(p => 'Phương án ' + p.name.slice(0, 1) + ' giống ' + p.same).join(', ')}, nên không hiện lại.</p>`;
   html += '<div class="plans">' + ui.plans.map((p, pi_) => {
@@ -986,7 +1007,8 @@ function viewCanTien() {
       <table class="preview" style="margin-top:8px">
         <tr><td>${S.du >= 0 ? 'Dư so với số cần' : 'Còn thiếu'}</td><td class="n ${S.du >= 0 ? '' : 'neg'}">${fmtM(Math.abs(S.du))}</td></tr>
         <tr><td>Vàng còn lại sau khi bán</td><td class="n">${fmtW(S.totalDem)}</td></tr>
-        <tr><td>Vốn còn lại sau khi bán</td><td class="n">${fmtM(S.totalV)}</td></tr></table>
+        <tr><td>Vốn còn lại sau khi bán</td><td class="n">${fmtM(S.totalV)}</td></tr>
+        ${S.cutLoss > 0 ? `<tr><td>Thiệt do tiệm hạ giá mua vào</td><td class="n neg">khoảng ${fmtM(S.cutLoss)}</td></tr>` : ''}</table>
       ${S.lossLoi < 0 ? `<div class="warn">⚠️ Có bán lỗ: lỗ chốt <b>${fmtM(-S.lossLoi)}</b>; so với nếu gửi ngân hàng thì thiệt <b>${fmtM(-S.lossVsBank)}</b>.</div>` : ''}
       ${S.valid ? '' : '<div class="warn">Số món bán vượt quá số món còn lại.</div>'}
       <div class="dlg-actions"><button class="primary" data-act="plan-confirm" data-plan="${pi_}" ${S.valid && S.thu > 0 ? '' : 'disabled'}>Xác nhận bán</button></div></section>`;
@@ -1206,6 +1228,7 @@ function dlgSale(lotId, sale) {
     <div class="row"><label class="field"><span>Số món bán (tối đa ${maxN})</span><input type="number" min="1" max="${maxN}" name="k" value="${sale ? sale.so_mon : 1}" style="width:80px"></label>
       <label class="field"><span>Giá bán (mỗi ${unit})</span><input class="money" name="gia" value="${sale ? fmtIn(sale.gia_ban) : s.hasPrice ? fmtIn(s.P) : ''}"></label></div>
     ${priceNote ? `<div class="row">${priceNote}</div>` : ''}
+    ${!sale && s.cut ? '<div class="row"><span class="small old" id="cutNote"></span></div>' : ''}
     <div class="row"><button type="button" class="sm" data-fill="het">Bán hết</button><button type="button" class="sm" data-fill="von">Bán lấy lại vốn</button><button type="button" class="sm" data-fill="nua">Bán một nửa</button></div>
     <details${sale ? ' open' : ''}><summary>Tùy chọn khác: ngày bán khác hôm nay, giá muốn mua lại, ghi chú</summary>
       <div class="row"><label class="field"><span>Ngày bán</span><input type="date" name="ngay" value="${sale ? sale.ngay : today()}" min="${lot.ngay_mua}" max="${today()}" required></label>
@@ -1233,6 +1256,7 @@ function dlgSale(lotId, sale) {
       const k = Math.floor(parseN(f.k.value)), gia = parseM(f.gia.value);
       const c = saleCalc({ lo_id: lot.id, ngay: f.ngay.value || today(), so_mon: k, gia_ban: gia });
       const left = maxN - k;
+      if (!sale && s.cut) $('#cutNote').textContent = k >= 1 && k <= maxN ? 'T' + cutText(s, k, 'số món này').slice(1) : '';
       $('#salePreview').innerHTML = k >= 1 && k <= maxN && gia > 0 ? `<table>
         <tr><td>Tiền thu về</td><td class="n"><b>${fmtM(c.thu)}</b></td></tr>
         <tr><td>Vốn của phần bán</td><td class="n">${fmtM(c.von)}</td></tr>
