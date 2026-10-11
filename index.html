@@ -292,11 +292,13 @@ const undoStack = [];
 let lastJSON = JSON.stringify(D);
 function commit(label = 'thay đổi', opts = {}) {
   _cache = null;
-  if (VIEW) return render();   // chế độ xem: không lưu, không hoàn tác
-  if (opts.noUndo) undoStack.length = 0;
-  else { undoStack.push({ label, json: lastJSON }); if (undoStack.length > 10) undoStack.shift(); }
   if (ui.plans) ui.plans = cashPlans(ui.cash);
-  persist(); render();
+  if (!VIEW) {   // chế độ xem: chỉ tính lại, không lưu, không hoàn tác
+    if (opts.noUndo) undoStack.length = 0;
+    else { undoStack.push({ label, json: lastJSON }); if (undoStack.length > 10) undoStack.shift(); }
+    persist();
+  }
+  opts.soft ? softRender() : render();
 }
 function undo() {
   const u = !VIEW && undoStack.pop(); if (!u) return;
@@ -449,11 +451,11 @@ function buyCell(t, ngay, mv, br, fresh) {
 // Giá dùng cho gợi ý mua của một loại: giá đang gõ trong bảng giá (f), hoặc giá đã lưu khi chưa có bảng.
 // fresh: đã có giá của ngày đang chọn (đã lưu, vừa gõ khác giá cũ, hoặc tick Không đổi)
 function priceVals(t, f) {
-  const lp = latestPrice(t.id);
-  if (!f) return { lp, ngay: today(), mv: lp?.mua_vao, br: lp?.ban_ra, fresh: !!lp && lp.ngay === today() };
+  const ngay = (f && f.ngay.value) || ui.priceDate, lp = basePrice(t.id, ngay);
+  if (!f) return { lp, ngay, mv: lp?.mua_vao, br: lp?.ban_ra, fresh: !!lp && lp.ngay === ngay };
   const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value);
   const changed = mv && (!lp || lp.mua_vao !== mv || (lp.ban_ra || 0) !== br);
-  return { lp, ngay: f.ngay.value, mv, br, fresh: (!!lp && lp.ngay === f.ngay.value) || !!changed || !!f['kd_' + t.id]?.checked };
+  return { lp, ngay, mv, br, fresh: (!!lp && lp.ngay === ngay) || !!changed || !!f['kd_' + t.id]?.checked };
 }
 // Tính lại cột Mua thêm? và phần Vì sao? theo giá đang gõ (chưa cần bấm Cập nhật)
 function refreshBuy(f) {
@@ -528,7 +530,7 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
+const ui = { priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsAllPrices: false, cash: 0, plans: null };
 function render() {
   document.body.classList.toggle('view', VIEW);
   if (VIEW && !ui.viewLoaded) { $('#tabs').innerHTML = ''; $('#app').innerHTML = viewGate(); return; }
@@ -541,11 +543,33 @@ function render() {
   $('#tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="tab" data-k="${k}">${n}</button>`).join('');
   const v = { homnay: viewHomNay, lo: viewLo, cantien: viewCanTien, lichsu: viewLichSu, thamso: viewThamSo }[tab];
   _cache = null;
-  $('#app').innerHTML = (VIEW ? `<div class="note">👁 <b>Chế độ xem</b>: không lưu gì, mọi ghi chép làm trên máy tính.${ui.viewTemp ? ' Đang xem với giá vừa gõ.' : ''}
-    <button class="sm" data-act="view-open">Mở file khác để xem</button></div>` : '') + (ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '') + fileBanner() + v();
-  const u = undoStack.at(-1), bu = $('#btnUndo');
-  bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label;
+  $('#app').innerHTML = (VIEW ? `<div class="note" id="viewNote">${viewNote()}</div>` : '') + (ui.notice ? `<div class="warn">${ui.notice} <button class="sm" data-act="notice-close">Đóng</button></div>` : '') + fileBanner() + v();
+  updateUndoBtn();
 }
+function updateUndoBtn() { const u = undoStack.at(-1), bu = $('#btnUndo'); bu.classList.toggle('hidden', !u); if (u) bu.textContent = '↶ Hoàn tác: ' + u.label; }
+// Vẽ lại sau khi lưu một dòng giá: giữ nguyên bảng giá (con trỏ, ô đang gõ), chỉ vẽ lại phần còn lại của tab Hôm nay.
+// Đang giữ chuột (vừa bấm một nút) thì đợi thả chuột mới vẽ, để cú bấm không rơi vào chỗ vừa bị vẽ lại.
+// Vẽ sau khi con trỏ chuyển xong (lưu do rời dòng xảy ra giữa lúc con trỏ đang chuyển sang ô khác).
+let pointerIsDown = false, softPending = false, softTimer = 0;
+function softRender() { softPending = true; if (!pointerIsDown && !softTimer) softTimer = setTimeout(flushSoft, 0); }
+function flushSoft() {
+  clearTimeout(softTimer); softTimer = 0;
+  if (!softPending) return;
+  softPending = false;
+  const f = $('#priceForm'), rest = $('#homRest');
+  if (tab !== 'homnay' || !f || !rest) return render();
+  _cache = null;
+  for (const t of D.vang.loai) {   // dòng không có con trỏ thì vẽ lại theo giá đã lưu
+    const tr = f.querySelector(`tr.prow[data-id="${t.id}"]`), a = document.activeElement;
+    if (tr && !(tr.contains(a) && a.matches('input.money'))) tr.outerHTML = priceRow(t);
+  }
+  $('#btnAllSame')?.classList.toggle('hidden', !staleIds().length);
+  rest.innerHTML = homRest();
+  if (VIEW) $('#viewNote').innerHTML = viewNote();
+  refreshBuy(f); updateUndoBtn();
+}
+const viewNote = () => `👁 <b>Chế độ xem</b>: không lưu gì, mọi ghi chép làm trên máy tính.${ui.viewTemp ? ' Đang xem với giá vừa gõ.' : ''}
+    <button class="sm" data-act="view-open">Mở file khác để xem</button>`;
 const viewDataBtns = () => `<button class="primary" data-act="view-open">Mở tai-san.json để xem</button>` +
   (oldLocal ? ` <button data-act="view-old">Tải bản dữ liệu cũ trong trình duyệt</button>` : '');
 function viewGate() {
@@ -575,21 +599,58 @@ function viewHomNay() {
   if (!D.vang.loai.length) return card('Bắt đầu', (hasFSA && !fileHandle && !pendingHandle ? `<p><b>Bước 1.</b> Tạo file lưu dữ liệu (nên đặt trong OneDrive/Google Drive):
       <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button></p>
     <p><b>Bước 2.</b> ` : '<p>') + `Thêm lô vàng đầu tiên, loại vàng tạo ngay trong form: <button class="primary" data-act="lot-add">+ Thêm lô</button></p>`);
-  const priceRows = D.vang.loai.map(t => {
-    const p = latestPrice(t.id);
-    const beMua = p && p.ban_ra ? p.ban_ra / p.mua_vao - 1 : null;
-    return `<tr class="prow"><td class="c-ten">${esc(t.ten)}</td><td class="c-dv">${UNIT_NAME[t.don_vi_niem_yet]}</td>
+  const html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${ui.priceDate}" max="${today()}" required></label></div>
+    <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${D.vang.loai.map(priceRow).join('')}</table></div>
+    <div class="row" style="margin-top:10px"><button type="button" id="btnAllSame" data-act="all-same" class="${staleIds().length ? '' : 'hidden'}">Tất cả không đổi</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. ${VIEW ? 'Chế độ xem: rời dòng là tính lại theo giá vừa gõ, không lưu.' : 'Sửa xong, rời dòng hoặc nhấn Enter là lưu.'} Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>
+    <details id="buyWhy"${ui.whyOpen ? ' open' : ''}><summary>Vì sao? · Biểu đồ 90 ngày</summary><div id="whyBody">${whyBody()}</div></details>`);
+  return html + `<div id="homRest">${homRest()}</div>`;
+}
+// Giá điền sẵn của một loại cho ngày đang chọn
+const basePrice = (id, ngay) => latestPrice(id);
+// Các loại chưa có giá của ngày đang chọn (để tick Không đổi / Tất cả không đổi)
+const staleIds = () => D.vang.loai.filter(t => { const b = basePrice(t.id, ui.priceDate); return b && b.ngay < ui.priceDate; }).map(t => t.id);
+function priceRow(t) {
+  const p = basePrice(t.id, ui.priceDate), stale = p && p.ngay < ui.priceDate;
+  const beMua = p && p.ban_ra ? p.ban_ra / p.mua_vao - 1 : null;
+  return `<tr class="prow" data-id="${esc(t.id)}"><td class="c-ten">${esc(t.ten)}</td><td class="c-dv">${UNIT_NAME[t.don_vi_niem_yet]}</td>
       <td class="c-mv"><input class="money" name="mv_${esc(t.id)}" value="${p ? digits(p.mua_vao) : ''}" placeholder="VD: 118,5"></td>
       <td class="c-br"><input class="money" name="br_${esc(t.id)}" value="${p && p.ban_ra ? digits(p.ban_ra) : ''}" placeholder="VD: 120" data-spread="${p && p.ban_ra ? p.ban_ra - p.mua_vao : ''}"></td>
       <td class="n c-be">${beMua == null ? '—' : '+' + fmtP(beMua, false)}</td>
-      <td class="c-buy" id="buy_${esc(t.id)}">${(v => buyCell(t, v.ngay, v.mv, v.br, v.fresh))(priceVals(t))}</td><td class="small c-note ${p && p.ngay < today() ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (p.ngay < today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
-      <td class="c-kd">${p ? `<label class="small kd ${p.ngay < today() ? '' : 'hidden'}" data-pngay="${p.ngay}"><input type="checkbox" name="kd_${esc(t.id)}"> Không đổi</label>` : ''}</td></tr>`;
-  }).join('');
-  let html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${today()}" max="${today()}" required></label></div>
-    <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${priceRows}</table></div>
-    <div class="row" style="margin-top:10px"><button class="primary" type="submit">${VIEW ? 'Xem với giá này' : 'Cập nhật giá'}</button><span class="small muted">Gõ tắt: 118,5 = 118.500.000. Sửa giá mua vào thì giá bán ra tự cộng theo chênh lệch lần trước.${VIEW ? ' Chế độ xem: chỉ tính lại, không lưu.' : ''}</span><span class="spacer"></span><button type="button" data-act="lot-add">+ Thêm lô</button></div></form>
-    <details id="buyWhy"${ui.whyOpen ? ' open' : ''}><summary>Vì sao? · Biểu đồ 90 ngày</summary><div id="whyBody">${whyBody()}</div></details>`);
-
+      <td class="c-buy" id="buy_${esc(t.id)}">${(v => buyCell(t, v.ngay, v.mv, v.br, v.fresh))(priceVals(t))}</td><td class="small c-note ${stale ? 'old' : 'muted'}">${p ? 'giá ngày ' + fmtD(p.ngay) + (stale && ui.priceDate === today() ? ' · chưa cập nhật hôm nay' : '') : 'chưa có giá'}</td>
+      <td class="c-kd">${p ? `<label class="small kd ${stale ? '' : 'hidden'}" data-pngay="${p.ngay}"><input type="checkbox" name="kd_${esc(t.id)}"> Không đổi</label>` : ''}</td></tr>`;
+}
+// Bảng giá: rời khỏi một dòng (hoặc Enter) là lưu dòng đó cho ngày đang chọn, cùng các kiểm tra chống gõ nhầm
+const setPrice = row => { D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.ngay && p.loai_id === row.loai_id)); D.vang.gia.push(row); };
+function resetRow(f, id) {
+  const b = basePrice(id, ui.priceDate), br = f['br_' + id];
+  f['mv_' + id].value = b ? digits(b.mua_vao) : ''; br.value = b && b.ban_ra ? digits(b.ban_ra) : ''; delete br.dataset.touched;
+  refreshBuy(f);
+}
+function saveRow(id) {
+  const f = $('#priceForm'); if (!f || !f['mv_' + id]) return;
+  const t = typeById(id), ngay = f.ngay.value, base = basePrice(id, ngay || ui.priceDate);
+  const mv = parseM(f['mv_' + id].value), br = parseM(f['br_' + id].value) || null;
+  if (!mv) return resetRow(f, id);
+  if (base && base.mua_vao === mv && (base.ban_ra || null) === br) return;   // không đổi gì
+  if (!ngay) return alert('Chưa nhập ngày.');
+  if (ngay > today()) return alert('Ngày nhập giá không được sau hôm nay.');
+  if (br && br < mv) { alert(`${t.ten}: giá tiệm bán ra thấp hơn giá mua vào, kiểm tra lại.`); return resetRow(f, id); }
+  if (!VIEW && base && Math.abs(mv / base.mua_vao - 1) > 0.15 &&
+    !confirm(`${t.ten}: giá thay đổi nhiều so với lần trước: ${fmtM(base.mua_vao)} → ${fmtM(mv)} (${fmtP(mv / base.mua_vao - 1)}).\n\nGiá này có đúng không?`)) return resetRow(f, id);
+  setPrice({ ngay, loai_id: id, mua_vao: mv, ban_ra: br });
+  if (VIEW) ui.viewTemp = true;
+  commit(`giá ${t.ten} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
+}
+// Tick Không đổi / Tất cả không đổi: ghi nhận giá điền sẵn cho ngày đang chọn
+function markSame(ids) {
+  const ngay = $('#priceForm')?.ngay.value || ui.priceDate, rows = [];
+  for (const id of ids) { const b = basePrice(id, ngay); if (b && b.ngay < ngay) rows.push({ ngay, loai_id: id, mua_vao: b.mua_vao, ban_ra: b.ban_ra }); }
+  if (!rows.length) return;
+  rows.forEach(setPrice); if (VIEW) ui.viewTemp = true;
+  commit(rows.length > 1 ? `giá không đổi ngày ${fmtD(ngay).slice(0, 5)}` : `giá ${typeById(rows[0].loai_id).ten} không đổi ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
+}
+function homRest() {
+  let html = '';
   const sts = openLots().map(l => lotState(l));
   const priced = sts.filter(s => s.hasPrice), noPrice = sts.filter(s => !s.hasPrice);
   const sumV = priced.reduce((a, s) => a + s.V, 0), sumG = priced.reduce((a, s) => a + s.G, 0), rz = realizedTotal();
@@ -1072,6 +1133,7 @@ const act = {
     ui.plans = null; ui.cash = 0; tab = 'lichsu'; commit(`bán theo phương án ${p.name.slice(0, 1)} (${S.rows.length} lô)`);
   },
   undo: () => undo(),
+  'all-same': () => markSame(staleIds()),
   'view-open': () => { ui.importMode = 'view'; $('#importFile').click(); },
   'view-old': () => download(`du-lieu-cu-trong-trinh-duyet-${today()}.json`, oldLocal, 'application/json'),
   'notice-close': () => { ui.notice = ''; render(); },
@@ -1096,8 +1158,11 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
   if (!f || f.id !== 'priceForm') return;
-  if (el.name === 'ngay')   // ô Không đổi chỉ hiện ở dòng có giá cũ hơn ngày đang chọn
+  if (el.name === 'ngay') {   // ô Không đổi chỉ hiện ở dòng có giá cũ hơn ngày đang chọn
+    if (/^\d{4}-\d{2}-\d{2}$/.test(el.value) && el.value <= today()) ui.priceDate = el.value;
     for (const k of f.querySelectorAll('.kd')) { const on = k.dataset.pngay < el.value; k.classList.toggle('hidden', !on); if (!on) k.querySelector('input').checked = false; }
+    $('#btnAllSame')?.classList.toggle('hidden', !staleIds().length);
+  }
   if (el.name.startsWith('br_')) el.dataset.touched = '1';
   if (el.name.startsWith('mv_')) {
     const br = f['br_' + el.name.slice(3)], mv = parseM(el.value);
@@ -1109,46 +1174,34 @@ document.addEventListener('visibilitychange', checkOnReturn);
 window.addEventListener('focus', checkOnReturn);
 document.addEventListener('toggle', e => { if (e.target.id === 'buyWhy') ui.whyOpen = e.target.open; }, true);
 for (const ev of ['pointermove', 'pointerdown']) document.addEventListener(ev, e => { const svg = e.target.closest && e.target.closest('svg.chart'); if (svg) chartHover(svg, e); });
+document.addEventListener('pointerdown', () => { pointerIsDown = true; }, true);
+for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { pointerIsDown = false; if (softPending && !softTimer) softTimer = setTimeout(flushSoft, 0); }, true);
 document.addEventListener('keydown', e => {
+  // Bảng giá: Enter = lưu dòng này (rời dòng) và xuống ô mua vào của dòng dưới
+  if (e.key === 'Enter' && e.target.matches('#priceForm input')) {
+    e.preventDefault();
+    const row = e.target.closest('tr.prow'); if (!row) return;
+    const next = row.nextElementSibling?.querySelector('input[name^=mv_]');
+    next ? next.focus() : e.target.blur();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, textarea, select') && !dlg.open) { e.preventDefault(); undo(); }
 });
 document.addEventListener('focusin', e => { if (e.target.matches('input.money, input[type=number]')) e.target.select(); });
-document.addEventListener('focusout', e => { if (e.target.matches('input.money')) { const v = parseM(e.target.value); e.target.value = v ? digits(v) : ''; } });
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if (el.matches('input.money')) { const v = parseM(el.value); el.value = v ? digits(v) : ''; }
+  // Rời khỏi một dòng giá là lưu dòng đó (chuyển giữa ô mua vào và ô bán ra cùng dòng thì chưa)
+  const row = el.closest && el.closest('#priceForm tr.prow');
+  if (!row || !el.matches('input.money')) return;
+  const to = e.relatedTarget;
+  if (to && row.contains(to) && to.matches('input.money')) return;
+  saveRow(row.dataset.id);
+});
 document.addEventListener('submit', e => {
   const f = e.target;
-  if (f.id === 'priceForm') {
-    e.preventDefault();
-    const ngay = f.ngay.value; if (!ngay) return alert('Chưa nhập ngày.');
-    if (ngay > today()) return alert('Ngày nhập giá không được sau hôm nay.');
-    const all = [], changed = [], ticked = [];
-    for (const t of D.vang.loai) {
-      const mv = parseM(f['mv_' + t.id].value), br = parseM(f['br_' + t.id].value) || null;
-      if (!mv) continue;
-      if (br && br < mv) return alert(`${t.ten}: giá tiệm bán ra thấp hơn giá mua vào, kiểm tra lại.`);
-      const lp = latestPrice(t.id), row = { ngay, loai_id: t.id, mua_vao: mv, ban_ra: br };
-      all.push(row);
-      if (!lp || lp.mua_vao !== mv || (lp.ban_ra || null) !== br) changed.push({ t, lp, row });
-      else if (f['kd_' + t.id]?.checked && lp.ngay < ngay) ticked.push(row);   // tick Không đổi: ghi nhận giá cũ cho ngày này
-    }
-    if (!all.length) return alert('Chưa nhập giá nào.');
-    let save = changed.map(x => x.row).concat(ticked);
-    if (VIEW) {   // chỉ tính lại theo giá vừa gõ, không lưu
-      for (const row of save.length ? save : all) { D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.ngay && p.loai_id === row.loai_id)); D.vang.gia.push(row); }
-      ui.viewTemp = true; _cache = null; return render();
-    }
-    if (!save.length) {
-      if (!confirm(`Giá không đổi so với lần nhập trước. Ghi nhận giá này cho ngày ${fmtD(ngay)}?`)) return;
-      save = all;
-    }
-    // Chặn gõ nhầm (thừa/thiếu số 0, nhầm giá lượng với giá chỉ)
-    const big = changed.filter(x => x.lp && Math.abs(x.row.mua_vao / x.lp.mua_vao - 1) > 0.15);
-    if (big.length && !confirm('Giá thay đổi nhiều so với lần trước:\n\n' + big.map(x => `${x.t.ten}: ${fmtM(x.lp.mua_vao)} → ${fmtM(x.row.mua_vao)} (${fmtP(x.row.mua_vao / x.lp.mua_vao - 1)})`).join('\n') + '\n\nGiá này có đúng không?')) return;
-    for (const row of save) {
-      D.vang.gia = D.vang.gia.filter(p => !(p.ngay === row.ngay && p.loai_id === row.loai_id));
-      D.vang.gia.push(row);
-    }
-    commit('cập nhật giá ngày ' + fmtD(ngay));
-  } else if (f.id === 'cashForm') {
+  if (f.id === 'priceForm') e.preventDefault();   // giá lưu khi rời dòng, không có nút gửi
+  else if (f.id === 'cashForm') {
     e.preventDefault();
     ui.cash = parseM(f.x.value); ui.plans = ui.cash > 0 ? cashPlans(ui.cash) : null; render();
   } else if (f.id === 'typeForm') {
@@ -1169,6 +1222,7 @@ document.addEventListener('change', e => {
   else if (el.dataset.setMoney) { const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
   else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit('đổi tên loại vàng'); } }
   else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit('đổi đơn vị loại vàng'); } }
+  else if (el.name && el.name.startsWith('kd_') && el.form?.id === 'priceForm') { if (el.checked) { const id = el.name.slice(3); saveRow(id); markSame([id]); } }
   else if (el.dataset.plan != null && el.dataset.row != null) {
     ui.plans[+el.dataset.plan].rows[+el.dataset.row].k = Math.max(0, Math.floor(parseN(el.value))); render();
   } else if (el.id === 'importFile') {
