@@ -20,3 +20,8 @@ Trên điện thoại (hoặc Safari, Firefox), trình duyệt không ghi thẳn
 Sao lưu và khôi phục nằm ở tab **Tham số → Dữ liệu**. File `tai-san.json` hỏng hoặc rỗng thì app không ghi gì vào file; màn chờ chỉ cách lấy lại: lịch sử phiên bản của OneDrive/Drive, **Khôi phục từ bản sao lưu…** (ghi vào đúng `tai-san.json`), hoặc **Dùng bản trong trình duyệt**. Muốn tạo file mới thì đặt tên khác `tai-san.json` đang dùng: Chrome xóa trắng file được chọn ở hộp Lưu.
 
 Đặc tả chi tiết: [`docs/dac-ta-vang.md`](docs/dac-ta-vang.md).
+
+## Dành cho người sửa app
+
+- Nguồn nằm trong `src/` (CSS, khung HTML, 12 file JS chia theo mục). `index.html` là bản ghép, **không sửa tay**: sửa trong `src/` rồi chạy `node build.js`. `node build.js --check` báo nếu `index.html` chưa khớp `src/`.
+- Kiểm thử: `npm install` (chỉ cần Playwright) rồi `npm test`. Bộ `tests/` giả lập 8 kịch bản dùng thật trong Chromium (tạo file, nhập giá, qua đêm, 2 máy, file hỏng, chế độ xem, gợi ý mua bán, phím tắt), không đụng file thật trên máy, chạy khoảng 5 giây. Sửa gì cũng chạy bộ này trước khi gộp; lỗi mới tìm ra thì thêm vào ca tương ứng trong `tests/cases/`.

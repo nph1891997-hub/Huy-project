@@ -1,0 +1,12 @@
+{
+  "name": "quan-ly-vang",
+  "private": true,
+  "description": "App một file HTML quản lý vàng theo lô. Nguồn ở src/, ghép thành index.html bằng build.js; kiểm thử giả lập luồng dùng ở tests/.",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node build.js --check && node tests/run.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}
