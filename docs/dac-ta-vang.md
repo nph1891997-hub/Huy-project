@@ -1,6 +1,6 @@
 # Đặc tả: App quản lý vàng
 
-> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22). Các mục 🧪 là sửa sau buổi review lần 2, **đã làm** (ticket #25–#32). Các mục 🔍 là sửa sau buổi review lần 3, **chờ duyệt, chưa làm code** · Ngày: 2026-10-11
+> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22). Các mục 🧪 là sửa sau buổi review lần 2, **đã làm** (ticket #25–#32). Các mục 🔍 là sửa sau buổi review lần 3, **đã làm** (ticket #36–#41) · Ngày: 2026-10-12
 
 ## Sửa sau buổi review lần 3 🔍
 
