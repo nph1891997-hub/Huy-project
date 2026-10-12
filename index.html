@@ -87,6 +87,10 @@ body.view #btnUndo,body.view #typeForm{display:none!important}
   .card{padding:10px}
   .bar{padding:6px 10px}
   #btnUndo{max-width:100%;white-space:normal;text-align:left}
+  /* Dòng tổng 2 cột: gõ giá ở tiệm xong không phải cuộn qua cả màn hình số tổng mới tới nhóm Nên chốt */
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .stat{padding:8px}
+  .stat b{font-size:15px;overflow-wrap:anywhere}
   dialog td,.preview td{white-space:normal}
   /* Bảng giá: mỗi loại một khối */
   #priceForm .scroll{overflow:visible}
@@ -161,22 +165,32 @@ const NF = new Intl.NumberFormat('vi-VN'), NF1 = new Intl.NumberFormat('vi-VN', 
 const digits = x => (x == null || x === '' || isNaN(x)) ? '' : NF.format(Math.round(x));
 // Nhập tiền: "118.500.000", "118500000", "118,5" hoặc "118.5" (số nhỏ hơn 1.000 hiểu là triệu),
 // "148.500" hoặc "148500" (từ 1.000 đến dưới 1.000.000 hiểu là nghìn đồng, như bảng giá các tiệm), "118,5tr", "500k";
-// ghi kèm "đ" thì đúng số đồng như gõ ("500.000đ")
+// ghi kèm "đ" thì đúng số đồng như gõ ("500.000đ"). Đơn vị bằng chữ: "2 tỷ", "150 triệu", "500 nghìn" / "500 ngàn", "… đồng" / "vnđ"
+const MONEY_UNIT = { ty: 1e9, ti: 1e9, trieu: 1e6, tr: 1e6, nghin: 1e3, ngan: 1e3, k: 1e3, dong: 0, vnd: 0, d: 0 };   // 0: đúng số đồng như gõ
+// Tách số và đơn vị (bỏ dấu: "tỷ" → "ty"); chữ không phải đơn vị tiền thì trả về null, không đoán
+function moneyParts(s) {
+  const t = String(s ?? '').toLowerCase().replace(/\s/g, '').replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const m = t.match(/^([\d.,]*)([a-z]*)$/);
+  return m && (!m[2] || Object.hasOwn(MONEY_UNIT, m[2])) ? { num: m[1], unit: m[2] } : null;
+}
+// Ô tiền có chữ mà app không hiểu (đang gõ dở thì chưa xét: chỉ gọi khi rời ô hoặc lưu)
+const badMoney = s => { const t = String(s ?? '').trim(); if (!t) return false; const p = moneyParts(t); return !p || !/\d/.test(p.num); };
 function parseM(s) {
-  let t = String(s ?? '').toLowerCase().replace(/\s/g, ''), mult = 1;
-  const exact = t.endsWith('đ'); t = t.replace(/đ/g, '');
-  if (t.endsWith('tr')) { mult = 1e6; t = t.slice(0, -2); } else if (t.endsWith('k')) { mult = 1e3; t = t.slice(0, -1); }
+  const p = moneyParts(s); if (!p) return 0;
+  let t = p.num, mult = p.unit ? MONEY_UNIT[p.unit] : null;
   if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');      // dấu phẩy là phần thập phân
   else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');  // 11.700.000 → dấu chấm ngăn nghìn
   const v = parseFloat(t.replace(/[^\d.]/g, ''));
   if (!isFinite(v) || v <= 0) return 0;
-  if (mult === 1 && !exact) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;
+  if (mult === 0) mult = 1;                                         // "đ", "đồng": đúng như gõ
+  else if (mult == null) mult = v < 1000 ? 1e6 : v < 1e6 ? 1e3 : 1;  // không kèm đơn vị
   return Math.round(v * mult);
 }
+const moneyHelp = s => `Không hiểu số tiền "${String(s).trim()}". Gõ số, có thể kèm đơn vị: 2 tỷ, 148,5tr, 148.500, 500k, 500.000đ.`;
 // Số tiền viết vào ô nhập: dưới 1 triệu thì kèm "đ", để đọc lại (bấm Lưu) không bị hiểu thành nghìn đồng
 const fmtIn = x => !x ? '' : x < 1e6 ? digits(x) + 'đ' : digits(x);
 const parseN = s => { const v = Number(String(s ?? '').replace(',', '.')); return isNaN(v) ? 0 : v; };
-const fmtM = x => (x == null || isNaN(x)) ? '—' : NF.format(Math.round(x)) + ' đ';
+const fmtM = x => (x == null || isNaN(x)) ? '—' : NF.format(Math.round(x)) + '\u00a0đ';   // khoảng trắng không ngắt dòng: chữ đ không rơi xuống dòng riêng
 const fmtTr = x => x >= 1e6 ? (x >= 1e8 ? NF1 : NF2).format(x / 1e6) + 'tr' : digits(x) + 'đ';
 const fmtMS = x => (x == null || isNaN(x)) ? '—' : (x > 0.5 ? '+' : '') + fmtM(x);
 const fmtP = (x, sign = true) => (x == null || isNaN(x) || !isFinite(x)) ? '—' :
@@ -242,7 +256,8 @@ async function storeChanged() {
       const text = await fi.text(); if (!text.trim()) return null;
       const raw = JSON.parse(text); if (!raw || typeof raw.vang !== 'object') return null;
       if ((raw.cap_nhat || '') === seen.cap) { seen.mod = fi.lastModified; return null; }
-      return { F: normalize(raw), mod: fi.lastModified };
+      const F = normalize(raw);
+      return { F, mod: fi.lastModified, empty: !hasData(F) && hasData(D) };   // empty: file bị thay bằng file không có dữ liệu
     }
     if (VIEW) return null;
     const c = localStorage.getItem(CAP_KEY);
@@ -266,6 +281,10 @@ function persist() {
   saveChain = saveChain.then(async () => {
     if (myGen !== gen) return;                     // dữ liệu đã được nạp lại từ nơi khác sau lần thay đổi này
     const ext = await storeChanged();              // trước mỗi lần lưu: nơi lưu bị sửa ở nơi khác thì không ghi đè
+    if (ext && ext.empty) {                        // file vừa bị thay bằng file trống: giữ thay đổi vừa làm trong trình duyệt, về màn chờ lấy lại
+      try { localStorage.setItem(KEY, compact); localStorage.setItem(CAP_KEY, ts); } catch { }
+      return toGateEmpty(h);
+    }
     if (ext) {
       const name = backupName(); download(name, h ? text : compact, 'application/json');
       const hadDlg = adopt(ext.F, ext.mod);
@@ -296,15 +315,29 @@ function persist() {
     }
   });
 }
-// Quay lại tab hoặc cửa sổ: nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
+// Quay lại tab hoặc cửa sổ (và mỗi phút): nơi lưu bị sửa ở nơi khác thì nạp lại trước khi người dùng thao tác trên số cũ
 function checkOnReturn() {
   if (document.visibilityState !== 'visible' || VIEW || booting || (!fileHandle && pendingHandle)) return;
   saveChain = saveChain.then(async () => {
     const ext = await storeChanged(); if (!ext) return;
+    if (ext.empty) return toGateEmpty(fileHandle);
+    // Bản mới thiếu lô hoặc lần bán đang có ở đây: tải bản đang mở về trước khi thay
+    const dl = fileHandle && lostData(D, ext.F) ? backupName() : '';
+    if (dl) download(dl, JSON.stringify(D, null, 2), 'application/json');
     const hadDlg = adopt(ext.F, ext.mod);
-    ui.notice = 'Dữ liệu vừa được cập nhật ở nơi khác (tab hoặc máy khác); app đã nạp bản mới.' + (hadDlg ? ' Hộp thoại đang mở đã đóng lại, hãy mở lại thao tác.' : '');
+    ui.notice = 'Dữ liệu vừa được cập nhật ở nơi khác (tab hoặc máy khác); app đã nạp bản mới.' + (hadDlg ? ' Hộp thoại đang mở đã đóng lại, hãy mở lại thao tác.' : '') +
+      (dl ? ` Bản mới thiếu lô hoặc lần bán so với bản đang mở (có thể đã bị xóa ở nơi khác); bản đang mở đã tải về thành <b>${dl}</b>.` : '');
     render();
   });
+}
+// File đang dùng vừa bị thay bằng file không có dữ liệu (thường do Tạo file dữ liệu… chọn trùng tên ở máy khác):
+// không nạp, về màn chờ để lấy lại. Dữ liệu đang mở giữ nguyên để Dùng bản trong trình duyệt ghi lại vào file
+const emptyMsg = name => `File ${name} không có dữ liệu nào (0 lô, 0 giá), trong khi trình duyệt còn dữ liệu sửa lần cuối ${fmtWhen(D.cap_nhat)}. Có thể file vừa bị thay ở máy khác (bấm Tạo file dữ liệu… rồi chọn trùng ${name}).`;
+function toGateEmpty(h) {
+  gen++; fileHandle = null; pendingHandle = h; undoStack.length = 0; ui.plans = null;
+  if (dlg.open) dlg.close();
+  Object.assign(ui, { gateError: emptyMsg(h.name), gateBad: true, gateLost: false, gateEmpty: true, gateRestore: null, notice: '' });
+  setStatus('Chưa mở file dữ liệu'); render();
 }
 function persistStatus() {
   if (VIEW) setStatus('Chế độ xem');
@@ -327,8 +360,11 @@ function commit(label = 'thay đổi', opts = {}) {
 function undo() {
   const u = !VIEW && undoStack.pop(); if (!u) return;
   D = normalize(JSON.parse(u.json)); _cache = null; ui.plans = null;
+  if (u.notice && ui.notice === u.notice) { ui.notice = ''; ui.rebuyOff = null; }   // dòng báo của chính thao tác vừa hoàn tác
   persist(); render();
 }
+// Dòng báo đi kèm thao tác vừa lưu (tắt nhắc mua lại, sang ngày mới): Hoàn tác thao tác đó thì bỏ dòng báo
+function stepNotice(html) { setNotice(html); const u = !VIEW && undoStack.at(-1); if (u) u.notice = html; }
 
 // IndexedDB để nhớ file đã chọn giữa các lần mở app
 function idb(mode, fn) {
@@ -343,6 +379,11 @@ const idbGet = k => idb('readonly', s => s.get(k));
 const idbSet = (k, v) => idb('readwrite', s => s.put(v, k));
 
 const hasData = x => x.vang.lo.length + x.vang.gia.length + x.vang.ban.length > 0;
+// B thiếu lô hoặc lần bán đang có trong A (so theo mã và ngày): nạp B thay A là mất dữ liệu, nên tải A về trước
+function lostData(A, B) {
+  const lo = new Set(B.vang.lo.map(l => l.id + '|' + l.ngay_mua)), ban = new Set(B.vang.ban.map(b => b.id + '|' + b.ngay));
+  return A.vang.lo.some(l => !lo.has(l.id + '|' + l.ngay_mua)) || A.vang.ban.some(b => !ban.has(b.id + '|' + b.ngay));
+}
 // File không dùng được (rỗng, hỏng, không phải dữ liệu của app): màn chờ chỉ cách lấy lại, không tự ghi gì vào file
 const badFile = msg => Object.assign(new Error(msg), { bad: true });
 // Đọc dữ liệu của app từ một file (bản sao lưu hoặc file dữ liệu); lỗi thì ném badFile
@@ -353,8 +394,9 @@ async function readData(h) {
   if (!raw || typeof raw !== 'object' || typeof raw.vang !== 'object') throw badFile(`File ${h.name} không phải dữ liệu của app quản lý vàng.`);
   return normalize(raw);
 }
-// seenAs: dấu của nội dung đang nằm trong file khi ghi đè có chủ ý (khôi phục, ghi lại vào chính file đang dùng)
-async function useFile(handle, fromNew, seenAs) {
+// seenAs: dấu của nội dung đang nằm trong file khi ghi đè có chủ ý (khôi phục, ghi lại vào chính file đang dùng).
+// opts.picked: file vừa chọn ở Mở file khác…; opts.allowEmpty: bấm Vẫn dùng file trống ở màn chờ
+async function useFile(handle, fromNew, seenAs, opts = {}) {
   let mod = null, fileCap = '', keepLocal = false;
   if (!fromNew) {
     mod = (await handle.getFile()).lastModified;
@@ -367,16 +409,25 @@ async function useFile(handle, fromNew, seenAs) {
     const localDirty = hasData(D) && (D.cap_nhat || '') !== mark && body(D) !== body(F);
     const fileChanged = (F.cap_nhat || '') !== mark;
     if (!localDirty || fileChanged) {
-      if (localDirty) {
+      // File không có dữ liệu mà trình duyệt có: gần như chắc chắn file vừa bị thay nhầm (Tạo file dữ liệu… chọn trùng tên ở máy khác).
+      // File đang nhớ thì về màn chờ lấy lại; file vừa chọn ở Mở file khác… thì hỏi lại
+      const empty = !hasData(F) && hasData(D);
+      if (empty && !opts.allowEmpty) {
+        if (!opts.picked) throw Object.assign(badFile(emptyMsg(handle.name)), { empty: true });
+        if (!confirm(`File ${handle.name} không có dữ liệu nào (0 lô, 0 giá). Vẫn mở?\n\nBản trong trình duyệt sẽ được tải về trước.`)) return false;
+      }
+      // Bản trình duyệt sắp bị thay mà có thứ file không có (thay đổi chưa ghi, lô hoặc lần bán đã bị xóa, file trống): tải về trước
+      if (localDirty || empty || lostData(D, F)) {
         const name = backupName();
         download(name, JSON.stringify(D, null, 2), 'application/json');
-        ui.notice = `Bản trong trình duyệt khác với file <b>${esc(handle.name)}</b> (file đã được sửa ở nơi khác). App dùng dữ liệu trong file; bản trình duyệt đã tải về thành <b>${name}</b>. Cần lấy lại thì vào Tham số → Khôi phục từ bản sao lưu.`;
+        ui.notice = `${localDirty ? `Bản trong trình duyệt khác với file <b>${esc(handle.name)}</b> (file đã được sửa ở nơi khác).`
+          : `File <b>${esc(handle.name)}</b> ${empty ? 'không có dữ liệu nào' : 'thiếu lô hoặc lần bán so với bản trong trình duyệt (có thể đã bị xóa ở nơi khác)'}.`} App dùng dữ liệu trong file; bản trình duyệt đã tải về thành <b>${name}</b>. Cần lấy lại thì vào Tham số → Khôi phục từ bản sao lưu.`;
       }
       D = F;
     } else keepLocal = true;
   }
   gen++; seen = seenAs || { mod, cap: fileCap };   // dấu của nội dung đang nằm trong file (kể cả khi giữ bản trình duyệt để ghi vào)
-  ui.gateError = ''; ui.gateBad = ui.gateLost = false; ui.gateRestore = null;
+  ui.gateError = ''; ui.gateBad = ui.gateLost = ui.gateEmpty = false; ui.gateRestore = null;
   fileHandle = handle; pendingHandle = null;
   try { await idbSet('file', handle); } catch { }
   if (fromNew || keepLocal) return commit('', { noUndo: true });   // tạo file mới, hoặc đưa bản trình duyệt vào file
@@ -656,7 +707,7 @@ const sellK = { het: s => s.n, nua: s => Math.ceil(s.n / 2), von: s => Math.min(
 
 // ===================== Giao diện chung =====================
 let tab = 'homnay';
-const ui = { gateError: '', gateBad: false, gateLost: false, gateRestore: null, priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsPType: '', lsPYear: '', cash: 0, plans: null };
+const ui = { gateError: '', gateBad: false, gateLost: false, gateEmpty: false, gateRestore: null, priceDate: today(), viewLoaded: false, viewTemp: false, importMode: '', whyOpen: false, giuOpen: false, waitOpen: false, notice: '', loStatus: 'open', loType: '', loOpen: null, lsYear: '', lsPType: '', lsPYear: '', cash: 0, plans: null };
 // "Hôm nay" mà bảng giá đang hiển thị: để tab mở qua đêm thì today() đã sang ngày mới mà bảng vẫn là ngày cũ
 let shownDay = today();
 // Sang ngày mới: ô Ngày đang là hôm nay cũ thì chuyển sang hôm nay (đang nhập bù một ngày khác thì giữ). Trả về ngày cũ nếu vừa sang ngày
@@ -728,7 +779,7 @@ function gateView() {
   const fix = ui.gateRestore
     ? `<div class="row"><button class="primary" data-act="gate-restore-go">Ghi bản sao lưu ${esc(ui.gateRestore.name)} vào ${n}</button></div>`
     : ui.gateBad ? `<p>Lấy lại bản trước bằng <b>lịch sử phiên bản</b> của OneDrive/Google Drive (trên web: chuột phải vào file → Lịch sử phiên bản) rồi bấm Mở lại, hoặc:</p>
-      <div class="row"><button data-act="gate-restore">Khôi phục từ bản sao lưu…</button>${hasData(D) ? `<button data-act="gate-local">Dùng bản trong trình duyệt${when ? ` (sửa lần cuối ${when})` : ''}</button>` : ''}</div>` : '';
+      <div class="row"><button data-act="gate-restore">Khôi phục từ bản sao lưu…</button>${hasData(D) ? `<button data-act="gate-local">Dùng bản trong trình duyệt${when ? ` (sửa lần cuối ${when})` : ''}</button>` : ''}${ui.gateEmpty ? '<button class="sm" data-act="gate-empty" title="Bản trong trình duyệt được tải về trước">Vẫn dùng file trống</button>' : ''}</div>` : '';
   return card('📂 Mở dữ liệu', `${ui.gateError ? `<div class="warn">${esc(ui.gateError)}</div>` : ''}${fix}
     ${ui.gateBad ? '' : `<p>Dữ liệu nằm trong file <b>${n}</b>. Mở lại file để xem số liệu mới nhất; bản lưu trong trình duyệt có thể cũ hơn (ví dụ khi vừa sửa trên máy khác).</p>`}
     <div class="row"><button class="${ui.gateBad ? '' : 'primary'}" data-act="file-reconnect" style="font-size:16px;padding:9px 18px">Mở lại ${n}</button>
@@ -738,8 +789,12 @@ function fileBanner() {
   if (!hasFSA || fileHandle) return '';
   if (!D.vang.loai.length && !D.vang.lo.length) return '';
   return `<div class="note">Dữ liệu đang lưu tạm trong trình duyệt. Lưu vào file để không mất:
-    <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button></div>`;
+    <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button>
+    <br><span class="small muted">${SAME_FILE_HINT}</span></div>`;
 }
+// Trình duyệt chưa biết file nào đang dùng (máy mới, xóa dữ liệu trình duyệt) nên hộp Lưu vẫn gợi ý tai-san.json:
+// nhắc dùng Mở file có sẵn…, vì chọn trùng file có sẵn ở hộp Lưu thì Chrome xóa trắng file đó
+const SAME_FILE_HINT = 'Đã dùng app trên máy khác, hoặc đã có tai-san.json? Bấm Mở file có sẵn… (đừng chọn file có sẵn ở hộp Tạo file: Chrome xóa trắng file đó).';
 const card = (title, body, extra = '') => `<section class="card ${extra}">${title ? `<h2>${title}</h2>` : ''}${body}</section>`;
 const typeOptions = (sel, withAll) => (withAll ? `<option value="">Tất cả loại</option>` : '') +
   D.vang.loai.map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.ten)}</option>`).join('');
@@ -747,8 +802,10 @@ const typeOptions = (sel, withAll) => (withAll ? `<option value="">Tất cả lo
 // ===================== Tab: Hôm nay =====================
 function viewHomNay() {
   if (!D.vang.loai.length && VIEW) return card('', '<p class="muted">File này chưa có loại vàng nào.</p>');
-  if (!D.vang.loai.length) return card('Bắt đầu', (hasFSA && !fileHandle && !pendingHandle ? `<p><b>Bước 1.</b> Tạo file lưu dữ liệu (nên đặt trong OneDrive/Google Drive):
-      <button class="primary" data-act="file-new">Tạo file dữ liệu…</button> <button data-act="file-open">Mở file có sẵn…</button></p>
+  if (!D.vang.loai.length) return card('Bắt đầu', (hasFSA && !fileHandle && !pendingHandle ? `<p><b>Bước 1.</b> Chọn file lưu dữ liệu (nên đặt trong OneDrive/Google Drive):</p>
+      <div class="row"><div class="field"><span>Dùng app lần đầu</span><button class="primary" data-act="file-new">Tạo file dữ liệu…</button></div>
+        <div class="field"><span>Đã dùng app trên máy khác, hoặc đã có tai-san.json</span><button class="primary" data-act="file-open">Mở tai-san.json có sẵn…</button></div></div>
+      <p class="small old">Đừng chọn file có sẵn ở hộp Tạo file: Chrome xóa trắng file đó.</p>
     <p><b>Bước 2.</b> ` : '<p>') + `Thêm lô vàng đầu tiên, loại vàng tạo ngay trong form: <button class="primary" data-act="lot-add">+ Thêm lô</button></p>`);
   const html = card('Giá vàng', `<form id="priceForm"><div class="row"><label class="field"><span>Ngày</span><input type="date" name="ngay" value="${ui.priceDate}" max="${today()}" required class="${ui.priceDate !== today() ? 'olddate' : ''}"></label><span id="dateNote" style="padding-bottom:6px">${dateNote()}</span></div>
     <div class="scroll"><table><tr class="hd"><th>Loại</th><th>Đơn vị</th><th>Tiệm mua vào (giá bạn bán được)</th><th>Tiệm bán ra (giá bạn phải mua)</th><th class="n" title="Mua vào hôm nay thì giá phải tăng bấy nhiêu mới bán ra hòa vốn">Mua hôm nay cần tăng<br>để hòa vốn</th><th title="Gợi ý theo quy tắc mua rải khi giá giảm (Tham số → Mua thêm)">Mua thêm?</th><th></th><th title="Đã xem giá tiệm, giá không đổi: tick để ghi nhận cho ngày đang chọn"></th></tr>${D.vang.loai.map(priceRow).join('')}</table></div>
@@ -814,7 +871,7 @@ function saveRow(id) {
   setPrice({ ngay, loai_id: id, mua_vao: mv, ban_ra: br });
   if (VIEW) ui.viewTemp = true;
   commit(`giá ${t.ten} ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
-  if (rolled && ngay === today()) setNotice(newDayNote());
+  if (rolled && ngay === today()) stepNotice(newDayNote());
 }
 // Tick Không đổi / Tất cả không đổi (ids trống = mọi dòng chưa có giá): ghi nhận giá điền sẵn cho ngày đang chọn
 function markSame(ids) {
@@ -825,7 +882,7 @@ function markSame(ids) {
   if (!rows.length) return;
   rows.forEach(setPrice); if (VIEW) ui.viewTemp = true;
   commit(rows.length > 1 ? `giá không đổi ngày ${fmtD(ngay).slice(0, 5)}` : `giá ${typeById(rows[0].loai_id).ten} không đổi ngày ${fmtD(ngay).slice(0, 5)}`, { soft: true });
-  if (rolled && ngay === today()) setNotice(newDayNote());
+  if (rolled && ngay === today()) stepNotice(newDayNote());
 }
 function homRest() {
   let html = '';
@@ -950,15 +1007,20 @@ function cashPlans(X) {
     for (let i = rows.length - 1; i >= 0; i--) while (rows[i].k > 0 && have - rows[i].s.valMon >= X) { rows[i].k--; have -= rows[i].s.valMon; }
     return rows.filter(x => x.k > 0);
   };
+  // Thứ tự chung: lô lời → lô lời của loại đang bị tiệm hạ giá mua vào (bán lúc này thiệt hơn ngày thường) → lô lỗ.
+  // Trong từng nhóm lô lời thì theo thứ tự riêng của phương án
+  const ok = prof.filter(s => !s.cut), cut = prof.filter(s => s.cut);
+  const plan = by => prune([ok.slice().sort(by), cut.slice().sort(by), loss].reduce((rows, order) => fill(order, rows), []));
   // A: lô ở nhóm Nên chốt trước (đạt mục tiêu, hoặc lời tụt dưới mức nhắc), như tab Hôm nay đang báo
-  const A = prune(fill(loss, fill(prof.slice().sort((a, b) => (b.grp === 'chot') - (a.grp === 'chot') || b.g - a.g))));
-  const single = prof.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
+  const A = plan((a, b) => (b.grp === 'chot') - (a.grp === 'chot') || b.g - a.g);
+  // B: một lô lời (không bị hạ giá mua vào) bán vừa đủ mà dư ít nhất; không có thì lấy lô có giá trị còn lại lớn → nhỏ
+  const single = ok.filter(s => s.n * s.valMon >= X).map(s => ({ s, k: Math.ceil(X / s.valMon) }))
     .sort((a, b) => (a.k * a.s.valMon - X) - (b.k * b.s.valMon - X));
-  const B = single.length ? [single[0]] : prune(fill(loss, fill(prof.slice().sort((a, b) => b.n * b.valMon - a.n * a.valMon))));
-  const C = prune(fill(loss, fill(prof.slice().sort((a, b) => a.g - b.g))));
+  const B = single.length ? [single[0]] : plan((a, b) => b.n * b.valMon - a.n * a.valMon);
+  const C = plan((a, b) => a.g - b.g);
   const toPlan = (name, desc, rows) => ({ name, desc, rows: rows.map(x => ({ id: x.s.lot.id, k: x.k })) });
   const plans = [
-    toPlan('A. Chốt lời tốt nhất', 'Lô đạt mục tiêu trước, rồi lô lời % cao nhất', A),
+    toPlan('A. Chốt lời tốt nhất', 'Lô nên chốt trước, rồi lô lời % cao nhất', A),
     toPlan('B. Ít lô nhất', 'Ưu tiên một lô bán vừa đủ, hạn chế cắt lẻ nhiều lô', B),
     toPlan('C. Giữ lô tốt', 'Bán lô lời ít trước, giữ lô lời nhiều cho chạy tiếp', C)
   ];
@@ -984,7 +1046,7 @@ function planSummary(plan, X) {
 const r_ = () => r();
 function viewCanTien() {
   let html = card('Cần tiền', `<form id="cashForm"><div class="row">
-    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="0" required style="width:200px"></label>
+    <label class="field"><span>Số tiền cần</span><input class="money" name="x" value="${fmtIn(ui.cash)}" placeholder="VD: 200tr, 1,5 tỷ" required style="width:200px"></label>
     <button class="primary" type="submit">Gợi ý</button></div></form>
     <p class="muted small">Tính theo giá tiệm mua vào gần nhất của từng loại. Không đụng lô lỗ nếu các lô lời đã đủ tiền; thiếu thì lấy lô lỗ ít % nhất trước. Bán theo từng món nên có thể dư một chút. Giá thực tế ở tiệm khác thì sửa lại lần bán ở tab Lịch sử.</p>`);
   if (!ui.plans) return html;
@@ -1034,12 +1096,15 @@ function salesTable(sales, withLot = true) {
 }
 function viewLichSu() {
   const years = [...new Set(D.vang.ban.map(b => b.ngay.slice(0, 4)))].sort().reverse();
-  const sales = D.vang.ban.filter(b => !ui.lsYear || b.ngay.startsWith(ui.lsYear)).sort((a, b) => b.ngay.localeCompare(a.ngay) || b.id.localeCompare(a.id));
+  // Lịch sử bán: mặc định 30 lần gần nhất, chọn năm thì hiện cả năm (dữ liệu nhiều năm có hàng nghìn lần bán, vẽ hết thì chậm)
+  const allSales = D.vang.ban.filter(b => !ui.lsYear || b.ngay.startsWith(ui.lsYear)).sort((a, b) => b.ngay.localeCompare(a.ngay) || b.id.localeCompare(a.id));
+  const sales = ui.lsYear ? allSales : allSales.slice(0, 30);
   const byYear = years.map(y => {
     const list = D.vang.ban.filter(b => b.ngay.startsWith(y)).map(saleCalc).filter(Boolean);
     return `<tr><td>${y}</td><td class="n">${list.length}</td><td class="n">${fmtM(list.reduce((a, c) => a + c.thu, 0))}</td><td class="n ${cls(list.reduce((a, c) => a + c.loi, 0))}">${fmtMS(list.reduce((a, c) => a + c.loi, 0))}</td></tr>`;
   }).join('');
-  let html = card('Lịch sử bán', `<div class="row"><select id="lsYear"><option value="">Tất cả các năm</option>${years.map(y => `<option ${ui.lsYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+  let html = card('Lịch sử bán', `<div class="row"><select id="lsYear"><option value="">30 lần bán gần nhất</option>${years.map(y => `<option ${ui.lsYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    ${ui.lsYear ? `<span class="small muted">${sales.length} lần bán</span>` : ''}</div>
     ${sales.length ? salesTable(sales) : '<p class="muted">Chưa có lần bán nào.</p>'}
     ${years.length ? `<h3>Lời đã chốt theo năm</h3><div class="scroll"><table style="width:auto"><tr><th>Năm</th><th class="n">Số lần bán</th><th class="n">Tiền thu</th><th class="n">Lời/lỗ chốt</th></tr>${byYear}</table></div>` : ''}`);
   const typeRows = D.vang.loai.map(t => {
@@ -1076,7 +1141,7 @@ function viewThamSo() {
       ${f('vang_ky_vong_mac_dinh', '% kỳ vọng mặc định cho lô mới')}${f('vang_sap_dat_mac_dinh', 'Báo sắp đạt khi giá còn cần tăng ≤ (%)')}</div>
     <p class="muted small">So sánh với ngân hàng dùng lãi đơn và lãi suất hiện tại cho toàn bộ thời gian giữ, nên chỉ mang tính tham khảo với lô giữ lâu.</p>`) +
     card('Mua thêm', `<div class="row">${f('vang_mua_giam_pct', 'Mua thêm khi giá giảm từ đỉnh 90 ngày ≥ (%)')}
-      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${fmtIn(T.vang_han_muc_von)}" placeholder="không giới hạn" style="width:200px"${ro}></label></div>
+      <label class="field"><span>Hạn mức vốn cho vàng (để trống = không giới hạn)</span><input class="money" data-set-money="vang_han_muc_von" value="${fmtIn(T.vang_han_muc_von)}" placeholder="không giới hạn · VD: 2 tỷ" style="width:200px"${ro}></label></div>
     <p class="muted small">App không đoán giá. Vùng mua: giá tiệm bán ra thấp hơn đỉnh 90 ngày ít nhất bấy nhiêu %; đã mua loại đó trong 90 ngày thì lần sau phải rẻ hơn lần mua gần nhất bấy nhiêu % nữa. Chênh lệch mua–bán cao bất thường thì gợi ý đợi; vốn đang giữ chạm hạn mức thì thôi gợi ý mua.</p>`) +
     card('Loại vàng', `<div class="scroll"><table style="width:auto"><tr><th>Tên</th><th>Đơn vị niêm yết giá</th><th></th></tr>
       ${D.vang.loai.map(t => `<tr><td><input data-type-name="${esc(t.id)}" value="${esc(t.ten)}"${ro}></td>
@@ -1110,6 +1175,8 @@ function openDlg(html, onSubmit, onInput) {
 dlg.addEventListener('submit', e => {
   e.preventDefault();
   if (e.submitter && e.submitter.value === 'cancel') return dlg.close();
+  const bad = [...$('#dlgForm').querySelectorAll('input.money')].find(i => badMoney(i.value));   // Enter khi ô tiền còn chữ app không hiểu
+  if (bad) { alert(moneyHelp(bad.value)); return bad.focus(); }
   if (dlgSubmit && dlgSubmit($('#dlgForm')) !== false) dlg.close();
 });
 
@@ -1202,7 +1269,7 @@ function dlgLot(lot, prefill) {
       commit(isEdit ? 'sửa lô ' + lot.id : 'thêm lô ' + newId);
       if (off.length) {
         ui.rebuyOff = off;
-        setNotice(`Đã tắt nhắc mua lại ${off.map(x => `${esc(x.id)} (${fmtTr(x.gia)})`).join(', ')} vì vừa mua ${esc(newId)} cùng loại. <button class="sm" data-act="rebuy-keep">Giữ lại nhắc</button>`);
+        stepNotice(`Đã tắt nhắc mua lại ${off.map(x => `${esc(x.id)} (${fmtTr(x.gia)})`).join(', ')} vì vừa mua ${esc(newId)} cùng loại. <button class="sm" data-act="rebuy-keep">Giữ lại nhắc</button>`);
       }
     },
     (f, e) => {
@@ -1387,7 +1454,7 @@ const act = {
         if (fileHandle) { D = F; ui.plans = null; return commit('khôi phục từ ' + h.name); }
         return await restoreInto(pendingHandle, F, h.name);
       }
-      await useFile(h, false);
+      await useFile(h, false, null, { picked: true });
     } catch (e) { fileError(e, h); }
   },
   'file-new': async () => {
@@ -1401,8 +1468,10 @@ const act = {
           const { mod, cap } = await fileSeen(h); await useFile(h, true, { mod, cap });
           return setNotice(`Đây là file đang dùng (<b>${esc(h.name)}</b>); dữ liệu đang mở đã được ghi lại vào đó.`);
         }
+        // File đang nhớ đã mất (không tìm thấy): chọn đúng chỗ cũ là tạo lại file, không có gì bị xóa trắng
+        if (ui.gateLost) { await useFile(h, true); return setNotice(`Đã tạo lại <b>${esc(h.name)}</b> từ bản trong trình duyệt.`); }
         // Ở màn chờ: nội dung file đã bị xóa trắng, chưa ghi gì vào; chỉ cách lấy lại
-        Object.assign(ui, { gateError: `Bạn vừa chọn lại đúng file ${h.name} trong hộp Lưu. Chrome xóa trắng file được chọn ở hộp này nên file đang rỗng.`, gateBad: true, gateLost: false });
+        Object.assign(ui, { gateError: `Bạn vừa chọn lại đúng file ${h.name} trong hộp Lưu. Chrome xóa trắng file được chọn ở hộp này nên file đang rỗng.`, gateBad: true, gateLost: false, gateEmpty: false });
         return render();
       }
       // Chọn trúng một file khác đã có dữ liệu (trình duyệt không xóa trắng): coi như mở file đó, không ghi đè
@@ -1417,6 +1486,14 @@ const act = {
     try {
       if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return fileError(new Error('Chưa được cho phép ghi file ' + h.name + '.'), h);
       await writeInto(h, D, 'Bản trong trình duyệt');
+    } catch (e) { fileError(e, h); }
+  },
+  // Màn chờ, file đang nhớ không có dữ liệu mà bạn cố ý xóa hết ở máy kia: mở file đó (bản trình duyệt tải về trước)
+  'gate-empty': async () => {
+    const h = pendingHandle; if (!h) return;
+    try {
+      if (await h.requestPermission({ mode: 'readwrite' }) !== 'granted') return fileError(new Error('Chưa được cho phép mở file ' + h.name + '.'), h);
+      await useFile(h, false, null, { allowEmpty: true });
     } catch (e) { fileError(e, h); }
   },
   // Màn chờ: chọn bản sao lưu rồi ghi vào đúng file đang nhớ
@@ -1441,7 +1518,7 @@ const act = {
 };
 // Chế độ xem: các thao tác làm thay đổi dữ liệu bị ẩn (CSS body.view) và chặn luôn ở đây
 const EDIT_ACTS = new Set(['lot-add', 'lot-edit', 'lot-del', 'sell', 'hold', 'sale-edit', 'sale-del', 'rebuy', 'rebuy-clear', 'price-del', 'type-del',
-  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect', 'gate-local', 'gate-restore', 'gate-restore-go', 'rebuy-keep']);
+  'plan-confirm', 'buy', 'undo', 'export-json', 'import-json', 'file-new', 'file-open', 'file-reconnect', 'gate-local', 'gate-empty', 'gate-restore', 'gate-restore-go', 'rebuy-keep']);
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && !b.disabled && !(VIEW && EDIT_ACTS.has(b.dataset.act))) act[b.dataset.act](b.dataset, b); });
 document.addEventListener('input', e => {
   const el = e.target, f = el.form;
@@ -1459,7 +1536,9 @@ document.addEventListener('input', e => {
 const onReturn = () => { tickDay(); checkOnReturn(); };
 document.addEventListener('visibilitychange', onReturn);
 window.addEventListener('focus', onReturn);
-setInterval(tickDay, 60000);   // tab hiện suốt qua nửa đêm, hay máy vừa thức dậy, cũng kịp sang ngày mới
+// Mỗi phút: tab hiện suốt qua nửa đêm, hay máy vừa thức dậy, cũng kịp sang ngày mới; cửa sổ để mở sẵn cũng thấy thay đổi ở máy khác.
+// Đang mở hộp thoại hoặc đang gõ trong một ô thì chưa kiểm tra file (nạp lại sẽ đóng hộp thoại, xóa số đang gõ); trước khi lưu vẫn kiểm tra
+setInterval(() => { tickDay(); if (!dlg.open && !document.activeElement?.matches('input, select, textarea')) checkOnReturn(); }, 60000);
 // Phần thu gọn: mở ra mới vẽ (vẽ sẵn rồi thì thôi), đóng lại thì bỏ nội dung.
 // Bấm vào tiêu đề thì vẽ ngay lúc bấm (sự kiện toggle đến sau, có thể kịp hiện một khung trống)
 const fillLazy = d => { const body = d.querySelector('.lazy-body'); if (!body.childElementCount) body.innerHTML = LAZY[d.dataset.lazy].html(); };
@@ -1483,13 +1562,23 @@ document.addEventListener('keydown', e => {
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, textarea, select') && !dlg.open) { e.preventDefault(); undo(); }
 });
-document.addEventListener('focusin', e => { if (e.target.matches('input.money, input[type=number]')) e.target.select(); });
+document.addEventListener('focusin', e => {
+  if (e.target.matches('input.money, input[type=number]')) e.target.select();
+  if (e.target.matches('input.money')) e.target.dataset.prev = e.target.value;   // để trả lại khi gõ số tiền app không hiểu
+});
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (el.matches('input.money')) el.value = fmtIn(parseM(el.value));
+  if (!el.matches || !el.matches('input.money')) return;
+  const row = el.closest('#priceForm tr.prow');
+  // Chữ không phải đơn vị tiền: không đoán; báo rồi trả ô về giá trị cũ (dòng giá: về giá điền sẵn, không lưu)
+  if (badMoney(el.value)) {
+    const bad = el.value; el.value = el.dataset.prev ?? '';
+    if (row) resetRow(row.closest('form'), row.dataset.id); else el.dispatchEvent(new Event('input', { bubbles: true }));
+    return alert(moneyHelp(bad));
+  }
+  el.value = fmtIn(parseM(el.value));
   // Rời khỏi một dòng giá là lưu dòng đó (chuyển giữa ô mua vào và ô bán ra cùng dòng thì chưa)
-  const row = el.closest && el.closest('#priceForm tr.prow');
-  if (!row || !el.matches('input.money')) return;
+  if (!row) return;
   const to = e.relatedTarget;
   if (to && row.contains(to) && to.matches('input.money')) return;
   saveRow(row.dataset.id);
@@ -1499,6 +1588,7 @@ document.addEventListener('submit', e => {
   if (f.id === 'priceForm') e.preventDefault();   // giá lưu khi rời dòng, không có nút gửi
   else if (f.id === 'cashForm') {
     e.preventDefault();
+    if (badMoney(f.x.value)) return alert(moneyHelp(f.x.value));
     ui.cash = parseM(f.x.value); ui.plans = ui.cash > 0 ? cashPlans(ui.cash) : null; render();
   } else if (f.id === 'typeForm') {
     e.preventDefault();
@@ -1517,7 +1607,9 @@ document.addEventListener('change', e => {
     if (el.dataset.set === 'vang_mua_giam_pct' && !(v > 0)) { alert('% giảm từ đỉnh phải lớn hơn 0.'); return render(); }
     D.tham_so[el.dataset.set] = v; commit('sửa tham số');
   }
-  else if (el.dataset.setMoney) { const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
+  else if (el.dataset.setMoney) {
+    if (badMoney(el.value)) return;   // rời ô thì báo và trả về hạn mức cũ (focusout), không đổi hạn mức
+    const v = parseM(el.value); D.tham_so[el.dataset.setMoney] = v > 0 ? v : null; commit('sửa hạn mức vốn'); }
   else if (el.dataset.typeName) { const t = typeById(el.dataset.typeName); if (t && el.value.trim()) { t.ten = el.value.trim(); commit('đổi tên loại vàng'); } }
   else if (el.dataset.typeUnit) { const t = typeById(el.dataset.typeUnit); if (t) { t.don_vi_niem_yet = el.value; commit('đổi đơn vị loại vàng'); } }
   else if (el.name && el.name.startsWith('kd_') && el.form?.id === 'priceForm') { if (el.checked) { const id = el.name.slice(3); saveRow(id); markSame([id]); } }
@@ -1543,7 +1635,7 @@ function fileError(e, h) {
     ui.gateError = fileErrMsg(e, h);
     // Cách lấy lại (khôi phục, dùng bản trình duyệt, tạo file mới) chỉ hiện khi chính file đang nhớ hỏng, rỗng hoặc mất;
     // lỗi khác (chưa cho quyền…) giữ nguyên các nút đang có
-    if (h === pendingHandle && (e.bad || e.name === 'NotFoundError')) { ui.gateBad = !!e.bad; ui.gateLost = !e.bad; ui.gateRestore = null; }
+    if (h === pendingHandle && (e.bad || e.name === 'NotFoundError')) { ui.gateBad = !!e.bad; ui.gateLost = !e.bad; ui.gateEmpty = !!e.empty; ui.gateRestore = null; }
     render();
   } else alert(fileErrMsg(e, h));
 }

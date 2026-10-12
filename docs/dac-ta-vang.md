@@ -1,6 +1,37 @@
 # Đặc tả: App quản lý vàng
 
-> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22). Các mục 🧪 là sửa sau buổi review lần 2, **đã làm** (ticket #25–#32) · Ngày: 2026-10-11
+> Trạng thái: **đã làm (`index.html`)**, gồm các mục 🆕 sửa sau buổi dùng thử (ticket #2–#11) và các mục 🔧 sửa sau buổi review (ticket #13–#22). Các mục 🧪 là sửa sau buổi review lần 2, **đã làm** (ticket #25–#32). Các mục 🔍 là sửa sau buổi review lần 3, **đã làm** (ticket #36–#41) · Ngày: 2026-10-12
+
+## Sửa sau buổi review lần 3 🔍
+
+Review lại code bản 🧪 và giả lập 12 tình huống trên chính `index.html` chạy trong Chromium, cùng cách như lần 2 (file `tai-san.json` dùng chung giữa 2 tab và 2 máy như qua OneDrive, hộp Lưu xóa trắng file được chọn như Chrome thật, đồng hồ giả, ghi lại mọi hộp hỏi và file tải về). Các tình huống: lần đầu dùng, **cài máy thứ hai theo README**, để tab mở qua đêm, gõ giá theo bảng niêm yết, tiệm nới chênh lệch theo 3 kiểu, mua lại bằng + Thêm lô rồi Hoàn tác, 2 máy mà một máy để cửa sổ mở sẵn, màn chờ (file mất, file hỏng, từ chối quyền), Cần tiền lúc tiệm hạ giá mua vào, điện thoại 360px, bộ nhớ đầy khi chưa kết nối file, dữ liệu 20 năm.
+
+Bản 🧪 chạy đúng: để tab mở qua đêm thì giá sáng nay lưu cho hôm nay; mở file ở 2 máy không đổi `cap_nhat`; `148.500` là 148,5tr và giá đầu tiên được so với đơn giá lô; điện thoại gõ thiếu số thì hỏi lại; file hỏng thì khôi phục bản sao lưu vào đúng `tai-san.json` (nội dung cũ tải về trước), từ chối quyền vẫn giữ các nút lấy lại; bộ nhớ đầy không báo nhầm; dòng tổng ghi lô chưa có giá; Nên chốt, hộp Bán, Cần tiền ghi đúng thiệt 10,0tr và +29,2% như ví dụ mục 3.4; phương án A ưu tiên lô Nên chốt; + Thêm lô tự tắt nhắc mua lại, có Giữ lại nhắc; ô mức nhắc ẩn ở lô mới; không cuộn ngang ở 360px. Kết quả, đánh số tiếp theo bản 🧪:
+
+**A. Lỗi** (đã tái hiện khi giả lập)
+
+| # | Lỗi | Cách sửa | Mục |
+|---|---|---|---|
+| A19 | **Cài máy thứ hai theo README** ("Lần đầu: bấm Tạo file dữ liệu…"): trình duyệt mới nên app không biết file nào đang dùng, hộp Lưu gợi ý `tai-san.json`; vào thư mục OneDrive, bấm Lưu → Thay thế → Chrome xóa trắng file, app ghi bộ dữ liệu trống vào. Máy A (1 lô, 240 dòng giá) quay lại tab: báo "Dữ liệu vừa được cập nhật ở nơi khác", nạp bộ trống, **thay luôn bản trong trình duyệt** (0 lô, 0 giá), không tải bản nào về. Mất hết ở cả 2 máy, chỉ còn lịch sử phiên bản của OneDrive. A12 chỉ chặn được khi trình duyệt đã biết file (cũng gặp khi đổi máy, cài lại Chrome, xóa dữ liệu trình duyệt) | Màn Bắt đầu tách 2 lựa chọn: dùng lần đầu → Tạo file dữ liệu…; đã dùng ở máy khác → Mở `tai-san.json` có sẵn…; README ghi như vậy. Lưới an toàn: **không bao giờ tự thay dữ liệu đang có bằng một file không có dữ liệu** (0 lô, 0 giá, 0 lần bán): về màn chờ như file rỗng, có Dùng bản trong trình duyệt; nạp file thiếu lô, lần bán so với bản trình duyệt thì tải bản trình duyệt về trước | 0, 3.6 |
+| A20 | Gõ tiền bằng chữ: app bỏ chữ, chỉ giữ số. Hạn mức `2 tỷ` → 2.000.000 đ, cột Mua thêm? mọi loại ⛔ "vốn đang giữ 420tr / 2tr"; Cần tiền `1 tỷ` → phương án bán 1 lượng, "dư 164tr"; `500 nghìn` → 500tr | Hiểu `tỷ`, `triệu`, `nghìn` / `ngàn` như `tr`, `k`; chữ khác thì báo không hiểu số tiền, không đoán | 1, 3.6 |
+
+**B. Gợi ý chưa thông minh**
+
+| # | Vấn đề | Cách sửa | Mục |
+|---|---|---|---|
+| B12 | Cần tiền 150tr lúc tiệm hạ giá mua vào SJC (170 → 158, bán ra 170): **cả 3 phương án** đều bán lô SJC V-2026-001, thiệt khoảng 10,0tr, dù bán 10 chỉ nhẫn V-2026-002 (đang lời +29,9%) được 162,4tr mà không thiệt gì. App cảnh báo "không gấp thì đợi", nhưng người vào tab Cần tiền là đang cần tiền | Lô của loại đang bị tiệm hạ giá mua vào xếp sau các lô lời khác (trước lô lỗ), như quy tắc không đụng lô lỗ: chỉ bán khi các lô lời kia không đủ | 2.4 |
+
+**C. Luồng chưa hiệu quả**
+
+| # | Vấn đề | Cách sửa | Mục |
+|---|---|---|---|
+| C5 | Máy B để app mở ở cửa sổ đang chọn (không chuyển tab, không chuyển cửa sổ), máy A bán lô: 70 giây sau máy B vẫn hiện lô đó ở Nên chốt. Bấm Bán… lô đó ở máy B thì mới bị chặn ("Thay đổi vừa rồi chưa được lưu…") và tải về thêm một file `ban-trinh-duyet-…`. Phép kiểm tra chỉ chạy lúc quay lại tab và trước khi lưu | Chạy thêm phép kiểm tra mỗi phút (cùng lúc xem sang ngày mới, A11), trừ khi đang mở hộp thoại hoặc con trỏ đang ở trong một ô | 0 |
+| C6 | Dữ liệu 20 năm (~1.600 lần bán): mỗi lần mở tab Lịch sử mất khoảng 1,2 giây tới khi vẽ xong, vì Lịch sử bán mặc định "Tất cả các năm"; chọn một năm thì 60 ms. Bấm Xác nhận bán ở Cần tiền xong app chuyển sang đúng tab này | Như Lịch sử giá: mặc định 30 lần bán gần nhất, chọn năm thì hiện cả năm | 2.5 |
+| C7 | Hoàn tác không xóa dòng báo của thao tác vừa hoàn tác: + Thêm lô → "Đã tắt nhắc mua lại B-0002 (16tr) vì vừa mua V-2026-003 cùng loại [Giữ lại nhắc]" → Hoàn tác: lô mất, nhắc đã bật lại, dòng báo vẫn nhắc V-2026-003 | Hoàn tác thì bỏ dòng báo của chính thao tác đó | 2.7 |
+| C8 | File mất (không tìm thấy), màn chờ → Tạo file mới… đặt lại đúng tên, đúng chỗ cũ: app báo nhầm "Chrome xóa trắng file được chọn… file đang rỗng", chỉ cách lấy lại bằng lịch sử phiên bản, phải bấm thêm Dùng bản trong trình duyệt. File đã mất thì không có gì bị xóa | File đang nhớ đã mất thì chọn đúng chỗ cũ là tạo lại: ghi bản trình duyệt vào luôn | 0 |
+| C9 | Điện thoại 360px: dòng tổng 5 ô xếp dọc cao 402px (hơn nửa màn hình 780px), nên gõ giá ở tiệm xong phải cuộn qua mới tới nhóm Nên chốt (bắt đầu ở 1.368px, bảng giá hết ở 884px) | Màn hình hẹp: dòng tổng xếp 2 cột | 2.8 |
+
+**Thứ tự làm đề xuất**: A19 (mất dữ liệu cả 2 máy mà không báo) → A20 → B12 → C5, C6 → các mục còn lại (kèm sửa chữ mô tả phương án A ở mục 2.4, còn ghi "Lô đạt mục tiêu trước").
 
 ## Sửa sau buổi review lần 2 🧪
 
@@ -136,6 +167,7 @@ Bỏ hộp hỏi cũ "Dữ liệu trong trình duyệt MỚI HƠN… OK = ghi đ
 - **Cách kiểm tra cho nhẹ**: xem thời điểm sửa của file, không đọc lại cả file. Thời điểm khác thì mới đọc file để so dấu cập nhật bên trong (`cap_nhat`), tránh báo nhầm khi OneDrive/Drive chỉ chạm vào file lúc đồng bộ mà nội dung không đổi.
 - **Chạy lúc quay lại tab hoặc cửa sổ** (chuyển tab, chuyển cửa sổ, mở máy lên lại): bị sửa thì nạp lại ngay, báo một dòng "Dữ liệu vừa được cập nhật ở nơi khác", trước khi bạn kịp thao tác trên số cũ. Hộp thoại để mở từ trước (dựa trên số cũ) thì đóng lại, kèm "hãy mở lại thao tác".
 - **Chạy trước mỗi lần lưu**: phòng khi tab vẫn đang được chọn suốt mà máy khác đã sửa file. Bị sửa thì **không ghi đè**: app nạp dữ liệu trong file, tải bản trình duyệt về như dòng cuối bảng trên, và báo "Thay đổi vừa rồi chưa được lưu vì file đã được sửa ở nơi khác. App đã nạp dữ liệu mới, hãy làm lại thao tác."
+- 🔍 **Chạy mỗi phút** khi tab đang hiện (cùng bộ đếm xem sang ngày mới, mục 2.1a), để cửa sổ để mở sẵn cũng thấy thay đổi ở máy khác mà không phải chờ tới lúc bấm lưu. Bỏ qua lần đó nếu đang mở hộp thoại hoặc con trỏ đang ở trong một ô (đang gõ): nạp lại lúc đó sẽ đóng hộp thoại, xóa số đang gõ; trước khi lưu vẫn kiểm tra như trên. Lý do: giả lập máy B để app mở ở cửa sổ đang chọn, máy A bán hết lô V-2026-001; 70 giây sau máy B vẫn hiện lô đó ở Nên chốt, không có sự kiện quay lại tab nào để kiểm tra. Bấm Bán… lô đó ở máy B mới bị chặn, kèm một file `ban-trinh-duyet-…` tải về không cần thiết.
 
 🔧 **Mốc đồng bộ chỉ cập nhật khi lưu trọn vẹn**: cả bản trong trình duyệt lẫn file đều ghi thành công. Bộ nhớ trình duyệt đầy (ghi lỗi) thì app xóa mốc, để lần mở sau dùng dữ liệu trong file, và báo một lần "Bộ nhớ trình duyệt đầy; dữ liệu vẫn được lưu vào file."
 
@@ -160,8 +192,25 @@ Trước khi ghi đè một file hỏng (không rỗng), app tải nội dung c�
 - Màn chờ chỉ có **Mở lại tai-san.json** và **Mở file khác…**; **Tạo file mới…** chỉ hiện khi file cũ không mở được (mất, hỏng, rỗng). Tab Tham số → Dữ liệu vẫn có Tạo file mới….
 - Vẫn chọn trúng chính file đang dùng (app nhận ra là cùng một file): đang mở file đó thì dữ liệu đang mở chính là của file, app ghi lại và báo "Đây là file đang dùng". Ở màn chờ thì nội dung file đã bị xóa: xử lý như **file rỗng** ở trên.
 - Tạo file mới tinh (tên chưa có) thì vẫn ghi bản trình duyệt vào như cũ.
+- 🔍 File đang nhớ **đã mất** (màn chờ báo không tìm thấy) mà Tạo file mới… chọn đúng tên, đúng chỗ cũ: đó là tạo lại file, không có gì bị xóa trắng, nên ghi bản trình duyệt vào luôn và mở như thường. Trước đây app coi là "chọn lại đúng file đang dùng", báo nhầm "Chrome xóa trắng file… file đang rỗng", chỉ cách lấy lại bằng lịch sử phiên bản, phải bấm thêm Dùng bản trong trình duyệt.
 
 Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hướng dẫn 2 bước: tạo file dữ liệu, rồi thêm lô đầu tiên.
+
+🔍 **Bắt đầu trên máy thứ hai.** Trình duyệt chưa từng dùng app (máy mới, cài lại Chrome, xóa dữ liệu trình duyệt) thì không biết file nào đang dùng, nên cách chặn ở A12 (không gợi ý tên trùng) không áp dụng được: hộp Lưu gợi ý `tai-san.json`, đúng tên file đang nằm trong OneDrive. Vì vậy bước 1 của màn Bắt đầu tách thành 2 lựa chọn rõ ràng, nút nào cũng to như nhau:
+
+- **Dùng app lần đầu**: Tạo file dữ liệu….
+- **Đã dùng app trên máy khác, hoặc đã có `tai-san.json`**: Mở `tai-san.json` có sẵn…. Kèm một dòng: "Đừng chọn file có sẵn ở hộp Tạo file: Chrome xóa trắng file đó."
+- Dòng nhắc đầu trang "Dữ liệu đang lưu tạm trong trình duyệt" (đã có dữ liệu, chưa kết nối file) ghi cùng dòng nhắc đó. README bước 2 ghi: máy thứ hai thì bấm Mở file có sẵn….
+
+🔍 **Không bao giờ tự thay dữ liệu đang có bằng một file không có dữ liệu.** File đọc được, đúng dữ liệu của app, nhưng **không có dữ liệu nào** (0 lô, 0 dòng giá, 0 lần bán) trong khi trình duyệt (hoặc tab đang mở) có dữ liệu thì gần như chắc chắn file vừa bị thay nhầm, thường do Tạo file dữ liệu… chọn trùng `tai-san.json` ở máy khác. Khi đó app không nạp file, xử lý như **file rỗng** (mục File hỏng hoặc rỗng ở trên): về màn chờ, báo "File tai-san.json không có dữ liệu nào, trong khi trình duyệt còn dữ liệu sửa lần cuối 11/10 08:00. Có thể file vừa bị thay ở máy khác.", kèm lịch sử phiên bản, Khôi phục từ bản sao lưu…, Dùng bản trong trình duyệt. Áp dụng ở mọi chỗ đọc file:
+
+- File đang nhớ: lúc mở (Mở lại, tự mở lúc khởi động) và lúc kiểm tra quay lại tab, mỗi phút, trước khi lưu (mục Nhiều tab, nhiều máy ở trên). Ở màn chờ, **Dùng bản trong trình duyệt** ghi dữ liệu đang mở, kể cả thay đổi vừa làm, vào `tai-san.json`. Có thêm nút phụ **Vẫn dùng file trống** cho trường hợp bạn cố ý xóa hết ở máy kia (không có nút này thì Mở lại bao nhiêu lần cũng quay về màn chờ): bản trình duyệt tải về trước, rồi mở file.
+- Mở file khác… chọn một file không có dữ liệu: hỏi lại "File … không có dữ liệu nào. Vẫn mở?"; mở thì bản trình duyệt tải về trước.
+- Hai bên cùng không có dữ liệu (máy mới mở file vừa tạo) thì mở như thường.
+
+🔍 **Nạp file thiếu dữ liệu so với bản trình duyệt thì tải bản trình duyệt về trước.** Lưới trên không bắt được trường hợp máy B lỡ chọn trùng rồi nhập tiếp vài lô (file không còn trống, nhưng mất hết lô của máy A). Nên mỗi lần nạp file (mở, quay lại tab, mỗi phút, trước khi lưu), nếu file **thiếu lô hoặc lần bán** đang có trong bản trình duyệt (so theo mã lô và ngày mua, mã lần bán và ngày bán) thì bản trình duyệt tải về thành `ban-trinh-duyet-<ngày>-<giờ>.json` trước khi bị thay, kèm một dòng báo như khi cả hai cùng đổi (mục Đối chiếu khi mở file; chỗ nào đã tải về sẵn, như khi cả hai cùng đổi hay bị chặn lúc lưu, thì không tải thêm). Xóa lô, xóa lần bán ở máy kia cũng làm máy này tải về một bản; việc đó ít khi làm nên chấp nhận được, đổi lại bản trình duyệt (chỗ dự phòng cuối cùng) không bao giờ bị thay bằng ít dữ liệu hơn mà không để lại bản nào.
+
+Lý do: giả lập máy A đang dùng (1 lô, 240 dòng giá), máy B cài theo README, bấm Tạo file dữ liệu… và lưu đè `tai-san.json` trong OneDrive. Chrome xóa trắng file, app máy B ghi bộ dữ liệu trống vào. Máy A quay lại tab: báo "Dữ liệu vừa được cập nhật ở nơi khác", nạp bộ trống và thay luôn bản trong trình duyệt bằng bộ trống (bản trình duyệt không có thay đổi chưa ghi nên app không tải về bản nào). Mất hết ở cả 2 máy, chỉ còn lịch sử phiên bản của OneDrive mà app không nhắc tới.
 
 ---
 
@@ -180,6 +229,8 @@ Lần đầu mở app (chưa có dữ liệu): màn hình **Bắt đầu** hư�
 - 🧪 Số từ `1.000` đến dưới `1.000.000` không kèm đơn vị hiểu là **nghìn đồng**: `148.500` (hay `148500`) → 148.500.000, đúng cách bảng giá các tiệm niêm yết (nghìn đồng/lượng, nghìn đồng/chỉ). Muốn đúng số đồng như gõ thì thêm `đ`: `500.000đ` (cũng là cách nhập giá cho loại hiếm hoi niêm yết theo ly, dem).
   - Ô tiền nào app điền sẵn hoặc viết lại một số dưới 1 triệu thì ghi kèm `đ` (`500.000đ`), để bấm Lưu lại không bị hiểu thành nghìn đồng.
   - Lý do: trước đây `148.500` hiểu là 148.500 đ, mà rời ô vẫn hiện `148.500` nên không thấy sai; giá đầu tiên của loại mới gõ như vậy làm lô báo −99,9%, Đang lỗ.
+- 🔍 **Đơn vị bằng chữ**: `tỷ` (cũng nhận `tỉ`, `ty`) = tỷ đồng, `triệu` = `tr`, `nghìn` / `ngàn` = `k`, `đồng` / `vnđ` = `đ`; có dấu hay không, viết liền hay cách đều được: `2 tỷ`, `1,5 tỷ` → 1.500.000.000; `500 nghìn` → 500.000. Gõ chữ khác thì app **không đoán**: rời ô thì báo "Không hiểu số tiền …", ô giữ giá trị cũ (bảng giá: dòng về giá điền sẵn, không lưu). Đang gõ dở (`2 t` trên đường tới `2 tỷ`) thì chưa báo.
+  - Lý do: trước đây app bỏ hết chữ, chỉ giữ số. Hạn mức `2 tỷ` thành 2.000.000 đ nên cột Mua thêm? mọi loại báo ⛔ Đủ hạn mức "vốn đang giữ 420tr / 2tr"; Cần tiền `1 tỷ` thành 1tr, phương án bán 1 lượng "dư 164tr"; `500 nghìn` thành 500tr. Hạn mức và Cần tiền hay là số tỷ, gõ chữ là cách tự nhiên nhất.
 - Bấm vào ô số thì nội dung được chọn sẵn, gõ là đè luôn, không phải xóa.
 
 ---
@@ -354,6 +405,8 @@ Nhập **số tiền cần** → app đưa ra 3 phương án đặt cạnh nhau:
 Quy tắc chung cho cả 3 phương án:
 
 1. **Không đụng lô lỗ** nếu các lô lời đã đủ tiền. 🆕 Lô lỗ ở đây là mọi lô có % lời < 0, kể cả lô lỗ chỉ do chênh lệch mua–bán (nằm trong nhóm Giữ ở tab Hôm nay), vì bán lúc này vẫn là chốt lỗ.
+   - 🔍 **Lô của loại đang bị tiệm hạ giá mua vào** (mục 3.4) xếp sau các lô lời khác, trước lô lỗ: chỉ bán khi các lô lời của loại khác không đủ tiền. Trong mỗi nhóm vẫn theo thứ tự riêng của từng phương án (A: Nên chốt trước…; B: tìm một lô bán vừa đủ trong các lô lời của loại khác trước). Phải bán tới các lô này thì phương án ghi "thiệt do tiệm hạ giá mua vào" như cũ.
+   - Lý do: giả lập lô SJC V-2026-001 (Nên chốt, lời tụt về +21,5%) và lô nhẫn V-2026-002 (20 chỉ, +29,9%); tiệm hạ giá mua vào SJC 170 → 158tr, bán ra giữ 170tr. Cần 150tr thì cả 3 phương án đều bán V-2026-001, thiệt khoảng 10,0tr; bán 10 chỉ nhẫn được 162,4tr mà không thiệt gì. Dòng cảnh báo "không gấp thì đợi" không giúp được người đang cần tiền.
 2. Thiếu tiền thì **bổ sung từ lô lỗ**, chọn lô **lỗ % ít nhất trước**, và gắn cảnh báo ⚠️.
 3. Bán theo **từng món** nên tiền thu có thể **dư** một chút; app ghi rõ số dư.
 4. Tổng tất cả các lô vẫn không đủ thì báo: còn thiếu bao nhiêu.
@@ -366,12 +419,13 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 - Giá đang dùng **không phải giá hôm nay** thì cảnh báo, nhắc cập nhật giá trước khi bán.
 - 🧪 Loại nào tiệm đang hạ giá mua vào (mục 3.4) thì cảnh báo "Tiệm đang hạ giá mua vào: SJC miếng, chênh lệch 7,6% (thường 1,2%); bán lúc này được ít hơn ngày thường, không gấp thì đợi", và mỗi phương án ghi thêm "thiệt do tiệm hạ giá mua vào: …".
 - 🧪 Lý do sửa phương án A: giả lập lô V-2026-001 đang ở Nên chốt (lời tụt về +23,1%), lô V-2026-002 đang Giữ (+28%, chưa đạt mục tiêu 35%); phương án "Chốt lời tốt nhất" bán V-2026-002, để lại đúng lô mà tab Hôm nay đang giục chốt.
+- 🔍 Dòng mô tả dưới tên phương án A ghi "Lô nên chốt trước, rồi lô lời % cao nhất" (đang còn ghi "Lô đạt mục tiêu trước" từ trước bản 🧪).
 
 > Ghi chú: "lỗ ít nhất" (phương án D ở buổi trao đổi trước) được gộp vào quy tắc 2, vì khi phải bán lỗ thì thứ tự "lỗ % ít nhất trước" chính là cách lỗ ít nhất.
 
 ### 2.5 Tab "Lịch sử"
 
-- **Lịch sử bán**: lọc theo năm. Mỗi dòng có nút **Sửa** và **Xóa**. Tổng lời đã chốt theo năm.
+- **Lịch sử bán**: lọc theo năm. Mỗi dòng có nút **Sửa** và **Xóa**. Tổng lời đã chốt theo năm. 🔍 Mặc định **30 lần bán gần nhất** (thay cho Tất cả các năm), chọn một năm thì hiện cả năm đó, như Lịch sử giá; bảng Lời đã chốt theo năm vẫn tính mọi năm. Lý do: dữ liệu 20 năm (~1.600 lần bán), mỗi lần mở tab Lịch sử mất khoảng 1,2 giây tới khi vẽ xong (chọn một năm: 60 ms), mà Xác nhận bán ở Cần tiền xong app chuyển sang đúng tab này.
 - **Lịch sử giá**: hiện 30 dòng gần nhất, có nút xem tất cả. Xóa được từng dòng. 🧪 Thay nút xem tất cả bằng **lọc theo loại vàng và theo năm**: mặc định mọi loại, 30 dòng gần nhất; chọn một năm thì hiện cả năm đó. Với dữ liệu 20 năm, vẽ hết 21.900 dòng mất khoảng 1,4 giây, trong khi các thao tác khác đều dưới 0,2 giây.
 - **Thống kê theo loại vàng**: vốn đang giữ, giá trị, lời tạm tính, lời đã chốt, 🆕 **giá vốn bình quân** (theo đơn vị niêm yết, của phần đang giữ).
 
@@ -404,6 +458,8 @@ Bạn chọn một phương án, **chỉnh số món nếu muốn**, rồi bấm
 
 **Hoàn tác thao tác vừa làm**: sau mỗi thay đổi, đầu trang hiện nút **↶ Hoàn tác: <việc vừa làm>** (hoặc bấm Ctrl+Z khi không đang gõ trong ô). Nhớ tối đa 10 bước gần nhất, áp dụng cho mọi thay đổi kể cả xóa. Danh sách hoàn tác mất khi tải lại trang hoặc mở file dữ liệu khác.
 
+🔍 Thao tác nào có dòng báo đầu trang đi kèm (đã tắt nhắc mua lại kèm Giữ lại nhắc, đã sang ngày mới) thì Hoàn tác thao tác đó cũng bỏ dòng báo. Trước đây Hoàn tác + Thêm lô thì lô mất, nhắc mua lại đã bật lại, mà dòng báo vẫn ghi "Đã tắt nhắc mua lại B-0002 vì vừa mua V-2026-003" kèm nút Giữ lại nhắc.
+
 ### 2.8 Màn hình hẹp và điện thoại 🆕
 
 Khi dùng thử trên điện thoại, bảng giá phải cuộn ngang mới thấy ô Tiệm bán ra, bảng lô phải cuộn ngang mới thấy lời/lỗ.
@@ -412,6 +468,7 @@ Khi dùng thử trên điện thoại, bảng giá phải cuộn ngang mới th�
 - **Tab Hôm nay không cuộn ngang** trên màn hình từ 360px trở lên. Các tab khác: trang không cuộn ngang, bảng dài cuộn trong khung của nó.
 - **Bảng giá**: mỗi loại một khối, ô Tiệm mua vào và Tiệm bán ra xếp chồng, dòng dưới là kết quả **Mua thêm?**; các cột còn lại thành một dòng chữ nhỏ.
 - **Bảng lô ở Hôm nay**: mỗi lô một thẻ. Dòng 1: mã lô, loại, **% lời**. Dòng 2: lời/lỗ và giá trị hôm nay. Dòng 3: các nút. Vốn, mục tiêu, so với ngân hàng xem trong Chi tiết.
+- 🔍 **Dòng tổng** xếp 2 cột. Lý do: ở 360px, 5 ô xếp dọc cao 402px, hơn nửa màn hình 780px; gõ giá ở tiệm xong (bảng giá hết ở 884px) phải cuộn qua cả dòng tổng mới tới nhóm Nên chốt (bắt đầu ở 1.368px).
 - **Biểu đồ** co theo bề ngang màn hình.
 - **Dữ liệu**: trình duyệt nào không ghi thẳng vào file được (thường là trình duyệt điện thoại, Safari, Firefox) thì app là **chế độ xem**, vì nếu cho lưu riêng trong trình duyệt đó sẽ có hai bộ dữ liệu lệch nhau:
   - Nút **Mở tai-san.json để xem**: chọn file từ OneDrive/Google Drive.
@@ -573,6 +630,10 @@ Thứ tự xét kết quả: nhập giá hôm nay → Đủ hạn mức → Đ�
 | 🧪 Mở file hỏng hoặc rỗng (kể cả lúc khởi động) | Không tự ghi gì vào file; màn chờ chỉ cách lấy lại: lịch sử phiên bản, Khôi phục từ bản sao lưu…, Dùng bản trong trình duyệt; ghi đè file hỏng thì tải nội dung cũ về trước (mục 0) |
 | 🧪 Tạo file mới… | Không gợi ý tên trùng file đang dùng; chọn trúng chính file đang dùng ở màn chờ thì xử lý như file rỗng (mục 0) |
 | 🧪 Mở file khác… chọn file `sao-luu-vang-…` / `ban-trinh-duyet-…` khi đã có file dữ liệu | Hỏi khôi phục nội dung vào `tai-san.json`; Hủy thì không làm gì (mục 0) |
+| 🔍 Đọc file (mở, quay lại tab, mỗi phút, trước khi lưu) mà file không có dữ liệu nào (0 lô, 0 giá, 0 lần bán) trong khi trình duyệt hoặc tab đang có dữ liệu | Không nạp; xử lý như file rỗng: màn chờ lấy lại, có Dùng bản trong trình duyệt (mục 0) |
+| 🔍 Nạp file mà file thiếu lô hoặc lần bán đang có trong bản trình duyệt | Tải bản trình duyệt về trước khi thay, báo một dòng (mục 0) |
+| 🔍 Tạo file mới… ở màn chờ khi file đang nhớ đã mất, chọn đúng tên, đúng chỗ cũ | Tạo lại file: ghi bản trình duyệt vào luôn (mục 0) |
+| 🔍 Ô tiền có chữ | `tỷ`, `triệu`, `nghìn` / `ngàn`, `đồng` hiểu là đơn vị; chữ khác thì báo không hiểu số tiền, ô giữ giá trị cũ (mục 1) |
 
 Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày của giá mới nhất, để nhập lô cũ không lấy nhầm giá hôm nay.
 
@@ -641,6 +702,7 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
 - 🆕 `nhac_tut_pct`: nhắc chốt khi lời tụt về mức này (%), `null` = không nhắc. File cũ chưa có trường này thì coi như `null`, không cần nâng `phien_ban`.
 - 🔧 Bản 🔧 không thêm trường dữ liệu nào; file bản 🆕 dùng nguyên được.
 - 🧪 Bản 🧪 cũng không thêm trường dữ liệu nào. Nhắc mua lại tự tắt (mục 2.1c) dùng lại trường `gia_mua_lai` như nút Bỏ nhắc (đặt về `null`).
+- 🔍 Bản 🔍 cũng không thêm trường dữ liệu nào.
 - 🆕 `vang_mua_giam_pct`: % giảm từ đỉnh 90 ngày để vào vùng mua. `vang_han_muc_von`: hạn mức vốn cho vàng (đồng), `null` = không giới hạn. File cũ thiếu thì lấy mặc định (5 và `null`).
 - `phien_ban` dùng để tự nâng cấp file khi app thêm tính năng.
 - `tiet_kiem`, `cctg`, `dat` để trống, không dùng.
@@ -669,6 +731,8 @@ Lô mới chỉ tự điền đơn giá khi ngày mua không cũ hơn ngày củ
 | 🧪 Hỏi "lần mua này có phải mua lại cho B-0001?" mỗi khi thêm lô | Thêm một câu hỏi mỗi lần mua; tự tắt kèm nút Giữ lại nhắc là đủ, ít khi cần giữ |
 | 🧪 Hiểu số theo đơn vị niêm yết của từng loại (loại theo ly, dem thì giữ số như gõ) | Mỗi ô tiền phải biết loại vàng đang chọn, dễ sai khi đổi loại trong form; loại niêm yết theo ly, dem hầu như không gặp, gõ kèm `đ` là đủ |
 | 🧪 Ước "giá mua vào ngày thường" theo giá bán ra cả khi tiệm nâng giá bán ra | Lúc đó giá mua vào không giảm, bán không thiệt; ghi "thiệt 10tr" sẽ sai và khuyên đợi nhầm. Chỉ ghi khi giá mua vào thấp hơn lần nhập có chênh lệch bình thường (mục 3.4) |
+| 🔍 Hỏi "đã có tai-san.json chưa?" mỗi lần bấm Tạo file dữ liệu… | Thêm một hộp hỏi, dễ bấm OK theo phản xạ. Tách 2 lựa chọn ở màn Bắt đầu, cộng 2 lưới an toàn (không thay dữ liệu đang có bằng file không có dữ liệu; nạp file thiếu dữ liệu thì tải bản trình duyệt về trước), nên lỡ chọn trùng vẫn lấy lại được (mục 0) |
+| 🔍 Giới hạn "giá mua vào ngày thường" `P*` không cao hơn `Pₘ` | Giả lập tiệm hạ nhẹ mua vào mà nâng mạnh bán ra (170/172 → 169,5/176): app ghi bán 2 lượng thiệt khoảng 8,8tr, trong khi giá mua vào chỉ thấp hơn hôm qua 1,0tr; giới hạn thì ghi 1,0tr. Nhưng app không biết giá thị trường thật: nếu giá lên thật mà tiệm giữ chênh lệch rộng nhiều ngày (ví dụ vẫn 168/180, `Pₘ` vẫn là 170 của ngày trước khi nới), giới hạn chỉ ghi 2tr/lượng trong khi chênh lệch như mọi khi thì bán được khoảng 177,9tr (thiệt 9,9tr). Không bên nào luôn đúng; giữ công thức mục 3.4, con số chỉ là "khoảng" |
 
 Trước đây mục này có "Biểu đồ giá" và "Giá vốn trung bình, nhắc mua thêm". 🆕 Nay đã làm: biểu đồ 90 ngày và gợi ý mua thêm (2.1e), giá vốn bình quân (2.5).
 
